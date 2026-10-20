@@ -1,0 +1,4 @@
+mode=fixed
+seed=1
+timesteps=1500000
+train_minutes=9.17

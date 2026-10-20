@@ -16,9 +16,15 @@ learned walking controller:
 Everything runs on **Windows 10/11 in VS Code** with plain `pip` packages. You don't need
 Linux, WSL, Docker, or a compiler.
 
-The folder already contains **one trained model per condition** (`runs/fixed_seed0`,
-`runs/randomized_seed0`) and the **results from my run** (`results/`), so `watch.py` and
-`plot_results.py` work right away without retraining.
+The folder already contains **trained models**: 3 seeds each of `fixed` and `randomized`, plus
+one phase-2 `randomized_plus` model, in `runs/`. It also contains the **results from my run** in
+`results/`, including plots, CSVs, robot pictures and GIFs. So `watch.py`, `plot_results.py` and
+the phase-2 demo work right away without retraining.
+
+**Phase 2:** the same code is set up as a starting point for a follow-on project on a real
+quadruped. It has extra sim-to-real effects (latency, sensor noise, gain randomization), a
+numpy-only policy export, and a robot interface with a deployment loop. See the
+[Phase 2 section](#phase-2-using-this-for-the-next-project) and [`docs/phase2.md`](docs/phase2.md).
 
 ---
 
@@ -111,14 +117,16 @@ You can run each step from the terminal (venv active), or from the **Run and Deb
 | Step | Command | VS Code config | Expected time (laptop CPU) |
 |------|---------|----------------|----------------------------|
 | a. Quick test | `python quick_test.py` | *1. Quick test* | 1 to 3 min |
-| b. Train fixed | `python train.py --mode fixed` | *2. Train fixed* | 10 to 20 min |
-| c. Train randomized | `python train.py --mode randomized` | *3. Train randomized* | 10 to 20 min |
-| d. Evaluate | `python evaluate.py` | *4. Evaluate + Plots* | 2 to 5 min |
-| e. Plot | `python plot_results.py` | (included in 4) / *6. Plots only* | under 10 s |
+| b. Train fixed | `python train.py --mode fixed` (3 seeds) | *2. Train fixed* | 30 to 60 min (10 to 20 per seed) |
+| c. Train randomized | `python train.py --mode randomized` (3 seeds) | *3. Train randomized* | 30 to 60 min |
+| d. Evaluate | `python evaluate.py` | *4. Evaluate + Plots* | 5 to 15 min (7 models) |
+| e. Plot | `python plot_results.py` | (included in 4) / *9. Plots only* | under 10 s |
 | f. Watch | `python watch.py --model fixed --condition low_friction` | *5. Watch* | real time |
+| g. Pictures for slides | `python make_media.py` | *6. Make pictures + GIFs* | about 1 min |
 
-My measured times on a 4-core cloud CPU: the quick test took 0.8 min, each 1.5 M-step training
-took about 10 min (both ran at the same time), and evaluation took a few minutes. A typical laptop
+My measured times on a 4-core cloud CPU: the quick test took about 1 min, and each 1.5 M-step
+training run took about 10 to 12 min (I ran 4 at the same time). Evaluating all 7 models took a few
+minutes. A typical laptop
 should be similar or a bit slower. To save time, you can run *Train fixed* and *Train randomized* at
 the same time in two terminals.
 
@@ -126,14 +134,13 @@ the same time in two terminals.
   makes every plot. It writes to `runs_quick/` and `results_quick/`, so it **never overwrites** the
   real models and results.
 * **Skip training:** the trained models are already included, so you can go straight to steps d to f.
-  Retraining overwrites `runs/<mode>_seed0/`.
-* **More seeds:** `python train.py --all` trains both modes for every seed in
-  `config.DEFAULT_SEEDS` (currently `[0]`; set it to `[0, 1, 2]` for 3 seeds per condition).
-  `python train.py --mode fixed --seed 1 --timesteps 1500000` trains one specific run. The error
-  bars in the plots switch automatically from binomial standard error to standard deviation
-  across seeds.
+  Retraining overwrites `runs/<mode>_seed<N>/`.
+* **Seeds:** `python train.py --all` trains both modes for every seed in `config.DEFAULT_SEEDS`
+  (`[0, 1, 2]`). `python train.py --mode fixed --seed 1 --timesteps 1500000` trains one specific
+  run. The error bars in the plots show the standard deviation across seeds. With only one seed,
+  they switch automatically to the binomial standard error.
 * **One-click alternative:** double-click `run_all.bat`. It creates the venv, installs everything
-  and runs the full pipeline (about 30 to 50 min).
+  and runs the full pipeline, including all 7 training runs (about 1.5 to 2.5 hours).
 
 ### Watching the robot
 ```powershell
@@ -145,26 +152,68 @@ A MuJoCo viewer window opens with the camera following the robot. Each episode p
 distance and whether the robot fell. Close the window to stop. With `--record` (or if the viewer
 cannot open), an MP4 is saved to `results/videos/`.
 
+**Why does the fixed controller fall on its face on low friction?** It slips first, and then it
+loses its balance. Its first push slips: the back foot shoots backward at about 1.5 m/s instead of
+driving the body forward. The bounding rhythm breaks, and the front leg ends up carrying the robot
+alone while its foot creeps forward. The nose then drops until the torso is below 0.18 m, which
+counts as a fall. All of this happens in about half a second. It never saw a slip in training, so it
+has no learned correction. The randomized controller trained on friction as low as 0.5x and stays
+level. `results/media/filmstrip_low_friction.png` shows both side by side.
+
 ---
 
-## My results (1 seed per condition, 1.5 M timesteps each, 50 test episodes per condition)
+## Phase 2: using this for the next project
 
-| Condition     | Fixed | Randomized |
-|---------------|-------|------------|
-| nominal       | 100%  | 100%       |
-| low_friction  | 0%    | 100%       |
-| high_friction | 100%  | 100%       |
-| heavy         | 2%    | 100%       |
-| light         | 100%  | 100%       |
-| weak_motors   | 0%    | 100%       |
-| pseudo_real   | 0%    | 100%       |
-| **gap (nominal minus pseudo-real)** | **100 pts** | **0 pts** |
+[`docs/phase2.md`](docs/phase2.md) has the full plan. In short:
 
-The randomized controller learned more slowly. It first averaged 5 m per episode at about 205 k
-steps, compared with about 143 k for the fixed controller. Both reached the same final reward.
-See `docs/writeup.md` for the full discussion.
+| Phase-2 tool | Command | What it shows |
+|--------------|---------|---------------|
+| Extra sim-to-real randomization | `python train.py --mode randomized_plus` | PD gains (0.8 to 1.2x), actuator latency (0 to 40 ms) and sensor noise, randomized together with friction, mass and motor strength |
+| Probe tests | `python evaluate.py` (automatic) | Latency, sensor noise and soft gains, which the main experiment did not randomize, in `results/phase2_probes.png` |
+| Policy export | `python export_policy.py` | Writes `runs/<run>/policy_export.npz` and checks that the numpy-only policy matches SB3 |
+| Deployment loop | `python deploy_sim.py --run randomized_seed0 --condition pseudo_real` | The robot-side loop `read_state -> policy -> send(q, kp, kd)` at 50 Hz, the same shape as Unitree's LowState / LowCmd. It checks that the loop matches the training env exactly |
+| Both at once | `python export_and_deploy.py` | VS Code config *8* |
+
+The deployment code lives in `deploy/`:
+- `numpy_policy.py` runs the policy with numpy only.
+- `observation.py` builds the observation from what a robot can measure.
+- `robot_interface.py` holds `RobotInterface`, the working MuJoCo `SimRobot`, and a `Go2Robot`
+  template for `unitree_sdk2_python`. The template is untested: there was no robot or SDK here.
+
+---
+
+## My results (3 seeds per controller, 1.5 M timesteps each, 50 test episodes per condition and seed)
+
+Success rate, as the mean over seeds:
+
+| Condition     | Fixed | Randomized | Phase-2 `randomized_plus` (1 seed) |
+|---------------|-------|------------|-------------------------------------|
+| nominal       | 100%  | 100%       | 100% |
+| low_friction  | 45%   | 95%        | 100% |
+| high_friction | 100%  | 100%       | 100% |
+| heavy         | 18%   | 100%       | 100% |
+| light         | 98%   | 96%        | 100% |
+| weak_motors   | 0%    | 67% (one seed failed) | 16% |
+| pseudo_real   | 0%    | 95%        | 88% |
+| **gap (nominal minus pseudo-real)** | **100 pts** | **5 pts** | 12 pts |
+| *Probe:* latency 20 ms | 19% | 78% | 100% |
+| *Probe:* latency 40 ms | 0%  | 9%  | 100% |
+| *Probe:* sensor noise  | 20% | 71% | 98% |
+| *Probe:* soft PD gains 0.7x | 100% | 100% | 100% |
+| *Probe:* pseudo-real + latency + noise | 0% | 3% | 86% |
+
+- **Training speed:** the randomized controller learned more slowly. It first averaged 5 m per
+  episode at about 212 k steps, compared with about 150 k for fixed. It reached 95% of its final
+  reward at about 440 k steps, compared with about 280 k. Both ended at about the same reward.
+- **Weak motors:** this was the hardest shift. Two randomized seeds passed it 100% of the time and
+  one failed it completely.
+- **Probes:** these show that randomization only covers what you randomize.
+
+See `docs/writeup.md` for the full discussion and `docs/phase2.md` for what the probes mean for the next phase.
 
 ![success rate](results/success_rate_bar.png)
+
+![phase-2 probes](results/phase2_probes.png)
 
 ---
 
@@ -182,6 +231,9 @@ See `docs/writeup.md` for the full discussion.
 | `results/gap_summary.png` | success drop from nominal to pseudo-real for each controller |
 | `results/friction_sweep.png` | success rate vs. friction scale 0.3x to 1.8x |
 | `results/training_curves.png` | training reward and distance for both conditions |
+| `results/phase2_probes.png` | latency / sensor-noise / gain probes, including the phase-2 controller |
+| `results/media/` | robot picture, filmstrips (fixed vs. randomized) and GIFs, made by `make_media.py` |
+| `runs/<run>/policy_export.npz` | numpy-only policy for deployment, made by `export_policy.py` |
 
 ## Project layout
 
@@ -194,10 +246,16 @@ domain_randomization_experiment/
   evaluate.py             test suite -> results/eval_results.csv, friction_sweep.csv
   plot_results.py         figures + summary table
   watch.py                live viewer (launch_passive) or MP4 recording
-  quick_test.py           end-to-end smoke test
+  quick_test.py           end-to-end smoke test (now also checks export + deployment loop)
   evaluate_and_plot.py    evaluate + plot in one go (VS Code config 4)
+  make_media.py           robot pictures, filmstrips and GIFs for slides (offscreen)
+  export_policy.py        phase 2: export a policy to numpy (+ equality check vs SB3)
+  deploy_sim.py           phase 2: robot-side control loop with SimRobot
+  export_and_deploy.py    phase 2: export + deployment demo in one go (VS Code config 8)
+  deploy/                 numpy_policy.py, observation.py, robot_interface.py (SimRobot, Go2Robot)
   run_all.bat             one-click setup + full pipeline
   docs/writeup.md         Program Explanation + Results sections for the report
+  docs/phase2.md          how this simulation carries into a phase-2 project
 ```
 
 ---

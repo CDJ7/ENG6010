@@ -12,8 +12,16 @@ Control setup (follows Hwangbo et al. 2019 and the Gurram et al. 2024 survey):
 Physics config: friction_scale, mass_scale and motor_strength_scale are applied
 to the MuJoCo model at reset, always starting from the NOMINAL values stored at
 construction, so the scaling never compounds from one episode to the next.
+
+Optional sim-to-real "extras" (used by the phase-2 mode, OFF in the main experiment):
+    pd_gain_scale       scales kp and kd (the survey randomizes controller gains)
+    action_delay_steps  the robot applies each action k control steps (k * 20 ms) late
+    obs_noise_std       Gaussian sensor noise on the observation (Hwangbo et al. add
+                        noise because real joint velocities are noisy)
 """
 from __future__ import annotations
+
+from collections import deque
 
 import numpy as np
 import gymnasium as gym
@@ -27,13 +35,14 @@ class WalkerEnv(gym.Env):
     metadata = {"render_modes": ["rgb_array"], "render_fps": int(round(1.0 / C.CONTROL_DT))}
 
     def __init__(self, physics: dict | None = None, randomize: bool = False,
-                 render_mode: str | None = None):
+                 extras: bool = False, render_mode: str | None = None):
         super().__init__()
         self.model = mujoco.MjModel.from_xml_path(str(C.ROBOT_XML))
         self.data = mujoco.MjData(self.model)
         assert abs(self.model.opt.timestep - C.PHYSICS_DT) < 1e-9, "PHYSICS_DT must match robot.xml"
 
         self.randomize = randomize
+        self.extras = extras            # also randomize gains / latency / sensor noise
         self.physics = dict(C.NOMINAL_PHYSICS if physics is None else physics)
         self.render_mode = render_mode
         self._renderer = None
@@ -61,15 +70,27 @@ class WalkerEnv(gym.Env):
         self.steps = 0
         self.start_x = 0.0
         self.motor_strength = 1.0
+        self.pd_gain_scale = 1.0
+        self.obs_noise_std = 0.0
+        self.action_queue = deque([np.zeros(self.model.nu)])
 
     # ------------------------------------------------------------------ physics
     def sample_physics(self) -> dict:
         """Draw one random physics config from the ranges in config.py."""
-        return {k: float(self.np_random.uniform(lo, hi))
-                for k, (lo, hi) in C.RANDOMIZATION_RANGES.items()}
+        physics = {k: float(self.np_random.uniform(lo, hi))
+                   for k, (lo, hi) in C.RANDOMIZATION_RANGES.items()}
+        if self.extras:
+            lo, hi = C.EXTRA_RANDOMIZATION_RANGES["pd_gain_scale"]
+            physics["pd_gain_scale"] = float(self.np_random.uniform(lo, hi))
+            lo, hi = C.EXTRA_RANDOMIZATION_RANGES["action_delay_steps"]
+            physics["action_delay_steps"] = int(self.np_random.integers(lo, hi + 1))
+            lo, hi = C.EXTRA_RANDOMIZATION_RANGES["obs_noise_std"]
+            physics["obs_noise_std"] = float(self.np_random.uniform(lo, hi))
+        return physics
 
     def apply_physics(self, physics: dict) -> None:
         """Scale friction, link masses / inertias and motor strength from the NOMINAL model."""
+        physics = {**C.EXTRA_DEFAULTS, **physics}   # extras default to "off"
         m = self.model
         m.geom_friction[:] = self.nominal_friction
         m.geom_friction[:, 0] = self.nominal_friction[:, 0] * physics["friction_scale"]
@@ -77,25 +98,32 @@ class WalkerEnv(gym.Env):
         m.body_mass[:] = self.nominal_mass * physics["mass_scale"]
         m.body_inertia[:] = self.nominal_inertia * physics["mass_scale"]
         self.motor_strength = physics["motor_strength_scale"]
+        self.pd_gain_scale = physics["pd_gain_scale"]
+        self.obs_noise_std = physics["obs_noise_std"]
+        delay = int(physics["action_delay_steps"])
+        self.action_queue = deque([np.zeros(self.model.nu)] * (delay + 1), maxlen=delay + 1)
         self.current_physics = dict(physics)
 
     # ------------------------------------------------------------------ helpers
     def _pd_torque(self, q_target: np.ndarray) -> np.ndarray:
         q = self.data.qpos[self.act_qpos_idx]
         qd = self.data.qvel[self.act_qvel_idx]
-        tau = self.motor_strength * (C.KP * (q_target - q) - C.KD * qd)
+        kp, kd = C.KP * self.pd_gain_scale, C.KD * self.pd_gain_scale
+        tau = self.motor_strength * (kp * (q_target - q) - kd * qd)
         limit = self.motor_strength * C.TORQUE_LIMIT
         return np.clip(tau, -limit, limit)
 
     def _get_obs(self) -> np.ndarray:
         qpos, qvel = self.data.qpos, self.data.qvel
-        return np.concatenate([
+        sensors = np.concatenate([
             [qpos[1] + self.z0, qpos[2]],       # torso height, pitch
             qpos[self.act_qpos_idx] - self.default_pose,
             qvel[0:3],                          # vx, vz, pitch rate
             np.clip(qvel[self.act_qvel_idx], -20, 20) * 0.1,
-            self.prev_action,
-        ]).astype(np.float32)
+        ])
+        if self.obs_noise_std > 0:              # sensor noise (never on the previous action)
+            sensors = sensors + self.np_random.normal(0.0, self.obs_noise_std, sensors.shape)
+        return np.concatenate([sensors, self.prev_action]).astype(np.float32)
 
     def distance(self) -> float:
         return float(self.data.qpos[0] - self.start_x)
@@ -121,7 +149,10 @@ class WalkerEnv(gym.Env):
 
     def step(self, action):
         action = np.clip(np.asarray(action, dtype=np.float64), -1.0, 1.0)
-        q_target = self.default_pose + C.ACTION_SCALE * action
+        # latency: the robot executes the action from action_delay_steps steps ago
+        self.action_queue.append(action)
+        applied = self.action_queue[0]
+        q_target = self.default_pose + C.ACTION_SCALE * applied
 
         x_before = self.data.qpos[0]
         torque_cost = 0.0
@@ -137,6 +168,8 @@ class WalkerEnv(gym.Env):
         height, pitch = self.data.qpos[1] + self.z0, self.data.qpos[2]
         fell = bool(height < C.MIN_TORSO_HEIGHT or abs(pitch) > C.MAX_TILT)
 
+        # forward progress, capped at TARGET_SPEED (a stricter speed-tracking reward that also
+        # penalized going faster made the policies LESS robust - see docs/phase2.md)
         reward = (C.FORWARD_WEIGHT * min(vx, C.TARGET_SPEED)
                   + C.ALIVE_BONUS
                   - C.TORQUE_PENALTY * torque_cost

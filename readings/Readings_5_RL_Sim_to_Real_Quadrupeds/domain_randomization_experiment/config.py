@@ -46,7 +46,7 @@ TORQUE_LIMIT = 12.0                      # nominal motor torque limit (Nm)
 TARGET_SPEED = 1.0          # m/s, forward speed the reward asks for
 MAX_EPISODE_STEPS = 500     # 500 steps * 0.02 s = 10 s episodes
 ALIVE_BONUS = 0.5
-FORWARD_WEIGHT = 2.0        # reward = FORWARD_WEIGHT * min(vx, TARGET_SPEED)
+FORWARD_WEIGHT = 2.0        # reward = FORWARD_WEIGHT * min(vx, TARGET_SPEED)  (progress, capped)
 TORQUE_PENALTY = 0.02       # times mean((tau / limit)^2)
 TILT_PENALTY = 0.5          # times pitch^2
 MIN_TORSO_HEIGHT = 0.18     # below this the robot has fallen (m)
@@ -70,13 +70,30 @@ RANDOMIZATION_RANGES = {
     "motor_strength_scale": (0.7, 1.1),
 }
 
+# ---------------------------------------------------------------------------
+# Extra sim-to-real effects for PHASE 2 (see docs/phase2.md). They are OFF in the
+# main experiment, so "fixed" vs "randomized" differ ONLY in friction / mass / motor
+# randomization. The "randomized_plus" mode also samples these at every reset.
+#   pd_gain_scale       kp and kd scale (the survey randomizes controller gains)
+#   action_delay_steps  actuator latency in 20 ms control steps (Hwangbo et al.)
+#   obs_noise_std       Gaussian sensor noise on the observation (Hwangbo et al.)
+# ---------------------------------------------------------------------------
+EXTRA_RANDOMIZATION_RANGES = {
+    "pd_gain_scale": (0.8, 1.2),
+    "action_delay_steps": (0, 2),      # integers 0, 1 or 2 -> 0 to 40 ms
+    "obs_noise_std": (0.0, 0.05),
+}
+EXTRA_DEFAULTS = {"pd_gain_scale": 1.0, "action_delay_steps": 0, "obs_noise_std": 0.0}
+
 NOMINAL_PHYSICS = {"friction_scale": 1.0, "mass_scale": 1.0, "motor_strength_scale": 1.0}
 
 # ---------------------------------------------------------------------------
 # PPO training (identical for both conditions so randomization is the ONLY difference)
 # ---------------------------------------------------------------------------
-MODES = ["fixed", "randomized"]
-DEFAULT_SEEDS = [0]                # one seed for now; use e.g. [0, 1, 2] for the full study
+MODES = ["fixed", "randomized"]          # the two controllers of the main experiment
+PHASE2_MODES = ["randomized_plus"]        # + gains / latency / sensor-noise randomization
+ALL_MODES = MODES + PHASE2_MODES
+DEFAULT_SEEDS = [0, 1, 2]                 # 3 seeds per condition
 TOTAL_TIMESTEPS = 1_500_000
 QUICK_TIMESTEPS = 20_000           # --quick smoke test
 N_ENVS = 8                         # parallel copies of the env inside DummyVecEnv
@@ -111,6 +128,17 @@ TEST_CONDITIONS = {
     "light":           dict(friction_scale=1.0, mass_scale=0.7,  motor_strength_scale=1.0),
     "weak_motors":     dict(friction_scale=1.0, mass_scale=1.0,  motor_strength_scale=0.6),
     "pseudo_real":     dict(friction_scale=0.6, mass_scale=1.25, motor_strength_scale=0.75),
+}
+
+# Phase-2 probes: sim-to-real effects that the main experiment did NOT randomize.
+# They show what the next phase has to add (results/phase2_probes.png).
+PROBE_CONDITIONS = {
+    "latency_20ms":   dict(NOMINAL_PHYSICS, action_delay_steps=1),
+    "latency_40ms":   dict(NOMINAL_PHYSICS, action_delay_steps=2),
+    "sensor_noise":   dict(NOMINAL_PHYSICS, obs_noise_std=0.05),
+    "soft_pd_gains":  dict(NOMINAL_PHYSICS, pd_gain_scale=0.7),
+    "pseudo_real_plus": dict(friction_scale=0.6, mass_scale=1.25, motor_strength_scale=0.75,
+                             action_delay_steps=1, obs_noise_std=0.03, pd_gain_scale=0.9),
 }
 
 # Friction sweep for friction_sweep.png

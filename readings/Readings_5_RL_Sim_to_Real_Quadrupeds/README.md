@@ -51,6 +51,7 @@ The assignment covered four sources, one from each category:
 | [`docs/Readings 5.docx`](docs/Readings%205.docx) | My Readings 5 document: summary and "what I learned" for each of the four sources |
 | [`domain_randomization_experiment/`](domain_randomization_experiment/) | Code project I built to try the readings' main idea myself (see below) |
 | [`domain_randomization_experiment/docs/writeup.md`](domain_randomization_experiment/docs/writeup.md) | "Program Explanation" and "Results" sections for the report |
+| [`domain_randomization_experiment/docs/phase2.md`](domain_randomization_experiment/docs/phase2.md) | How the simulation carries into a phase-2 project (Unitree Go2 roadmap) |
 | [`domain_randomization_experiment.zip`](domain_randomization_experiment.zip) | The same project zipped, ready to unzip and run on Windows |
 
 ## The code project: Domain Randomization Experiment
@@ -66,22 +67,38 @@ Stable-Baselines3 PPO:
   controller produces the torques.
 - I then test both controllers on **changed simulators** that stand in for "the real robot".
 
-Results (1 seed each, 1.5 M timesteps, 50 test episodes per condition; success = 5 m in 10 s without falling):
+Results (3 seeds per controller, 1.5 M timesteps, 50 test episodes per condition and seed;
+success = 5 m in 10 s without falling):
 
 | Test condition | Fixed | Randomized |
 |----------------|-------|------------|
 | Nominal | 100% | 100% |
-| Low friction 0.4x | 0% | 100% |
+| Low friction 0.4x | 45% | 95% |
 | High friction 1.6x | 100% | 100% |
-| Heavy 1.3x mass | 2% | 100% |
-| Light 0.7x mass | 100% | 100% |
-| Weak motors 0.6x | 0% | 100% |
-| **Pseudo-real** (0.6x friction, 1.25x mass, 0.75x motors) | **0%** | **100%** |
+| Heavy 1.3x mass | 18% | 100% |
+| Light 0.7x mass | 98% | 96% |
+| Weak motors 0.6x | 0% | 67% |
+| **Pseudo-real** (0.6x friction, 1.25x mass, 0.75x motors) | **0%** | **95%** |
 
-The "sim-to-real" gap (nominal minus pseudo-real) shrank from **100 points to 0 points** with
-randomization. The randomized controller trained somewhat more slowly but reached the same final reward.
+The "sim-to-real" gap (nominal minus pseudo-real) shrank from **100 points to about 5** with
+randomization. The randomized controller trained more slowly (about 212 k vs. 150 k steps to first
+walk 5 m) but reached the same final reward.
 
 ![Success rate bar chart](domain_randomization_experiment/results/success_rate_bar.png)
+
+### Ready for phase 2
+
+The project is also set up as the starting point for a phase-2 project on a real quadruped
+(see [`docs/phase2.md`](domain_randomization_experiment/docs/phase2.md)):
+
+- **Probe tests:** these cover effects the main experiment did not randomize. With 40 ms of
+  actuator latency, the randomized controller drops to 9%. A `randomized_plus` controller that
+  also randomizes latency, sensor noise and PD gains stays at 100% (1 seed).
+- **Numpy-only policy export:** the exported policy matches Stable-Baselines3 to within 1e-6.
+- **Robot interface and 50 Hz deployment loop:** the loop reads the state and sends joint targets
+  plus kp and kd, the same shape as Unitree SDK2's `LowState` / `LowCmd`. It runs on the MuJoCo
+  robot now, and a Go2 template is included.
+- **Pictures, GIFs and MP4s:** in `results/media/` and `results/videos/`.
 
 See [`domain_randomization_experiment/README.md`](domain_randomization_experiment/README.md) for
 step-by-step Windows / VS Code setup, how to run training, evaluation, plots and the viewer, and troubleshooting.

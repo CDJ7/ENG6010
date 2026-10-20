@@ -6,6 +6,7 @@ Examples (from the project folder, with the venv active):
     python train.py --mode fixed                  # fixed physics, default seeds
     python train.py --mode randomized --seed 0    # randomized physics, one seed
     python train.py --all                         # both modes x all DEFAULT_SEEDS
+    python train.py --mode randomized_plus        # phase 2: + gains / latency / sensor noise
 
 Each run is saved to runs/<mode>_seed<N>/ :
     model.zip, vecnormalize.pkl, training_log.csv
@@ -52,9 +53,9 @@ class TrainingLogger(BaseCallback):
                                     f"{dist:.3f}", f"{time.time() - self.t0:.1f}"])
 
 
-def make_env(randomize: bool, seed: int, rank: int):
+def make_env(randomize: bool, extras: bool, seed: int, rank: int):
     def _init():
-        env = WalkerEnv(randomize=randomize)
+        env = WalkerEnv(randomize=randomize, extras=extras)
         env.reset(seed=seed * 1000 + rank)
         return env
     return _init
@@ -63,12 +64,13 @@ def make_env(randomize: bool, seed: int, rank: int):
 def train(mode: str, seed: int, timesteps: int) -> None:
     run_dir = C.RUNS_DIR / f"{mode}_seed{seed}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    randomize = mode == "randomized"
+    randomize = mode in ("randomized", "randomized_plus")
+    extras = mode == "randomized_plus"        # phase 2: also gains / latency / sensor noise
     print(f"\n=== Training {mode} | seed {seed} | {timesteps:,} timesteps -> {run_dir} ===")
 
     torch.manual_seed(seed)
     np.random.seed(seed)
-    venv = DummyVecEnv([make_env(randomize, seed, i) for i in range(C.N_ENVS)])
+    venv = DummyVecEnv([make_env(randomize, extras, seed, i) for i in range(C.N_ENVS)])
     venv = VecMonitor(venv, info_keywords=("distance",))
     venv = VecNormalize(venv, norm_obs=True, norm_reward=True, clip_obs=10.0, gamma=C.PPO_KWARGS["gamma"])
 
@@ -89,10 +91,12 @@ def train(mode: str, seed: int, timesteps: int) -> None:
 if __name__ == "__main__":   # required on Windows
     torch.set_num_threads(1)  # small MLP: one thread is fastest and leaves cores free
     parser = argparse.ArgumentParser(description="Train PPO with or without domain randomization")
-    parser.add_argument("--mode", choices=C.MODES, help="fixed or randomized physics")
+    parser.add_argument("--mode", choices=C.ALL_MODES,
+                        help="fixed, randomized, or randomized_plus (phase 2: + gains/latency/noise)")
     parser.add_argument("--seed", type=int, help="single seed (default: all of config.DEFAULT_SEEDS)")
     parser.add_argument("--timesteps", type=int, default=C.TOTAL_TIMESTEPS)
-    parser.add_argument("--all", action="store_true", help="train both modes for every default seed")
+    parser.add_argument("--all", action="store_true",
+                        help="train fixed + randomized for every default seed")
     parser.add_argument("--quick", action="store_true", help="tiny smoke test (both modes, seed 0)")
     args = parser.parse_args()
 

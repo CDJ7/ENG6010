@@ -6,8 +6,11 @@ run EVAL_EPISODES episodes. Episode i always uses seed EVAL_SEED + i, so the fix
 randomized controllers see exactly the same start states. VecNormalize statistics are
 frozen (training=False) so evaluation never changes them.
 
+It also runs the phase-2 probe conditions (config.PROBE_CONDITIONS: latency, sensor noise,
+soft PD gains), which NO controller in the main experiment was randomized over.
+
 Outputs:
-    results/eval_results.csv     one row per episode (model, seed, condition, success, distance, reward)
+    results/eval_results.csv     one row per episode (model, seed, condition, group, success, distance, reward)
     results/friction_sweep.csv   one row per episode of the friction sweep
 
 Usage:
@@ -90,10 +93,13 @@ if __name__ == "__main__":
     t0 = time.time()
     for mode, seed, run_dir in runs:
         model, vecnorm = load_policy(run_dir)
-        for cond, physics in C.TEST_CONDITIONS.items():
+        conditions = [("main", c, p) for c, p in C.TEST_CONDITIONS.items()] + \
+                     [("phase2_probe", c, p) for c, p in C.PROBE_CONDITIONS.items()]
+        for group, cond, physics in conditions:
             res = run_episodes(model, vecnorm, physics, args.episodes)
+            full_physics = {**C.EXTRA_DEFAULTS, **physics}
             for r in res:
-                rows.append(dict(model=mode, seed=seed, condition=cond, **physics, **r))
+                rows.append(dict(model=mode, seed=seed, condition=cond, group=group, **full_physics, **r))
             sr = np.mean([r["success"] for r in res])
             dist = np.mean([r["distance"] for r in res])
             print(f"{mode:>10s} seed{seed} | {cond:<14s} success {sr:6.1%}  mean distance {dist:5.2f} m")

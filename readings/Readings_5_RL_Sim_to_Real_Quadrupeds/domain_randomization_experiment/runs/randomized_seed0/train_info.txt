@@ -1,4 +1,4 @@
 mode=randomized
 seed=0
 timesteps=1500000
-train_minutes=9.90
+train_minutes=9.03

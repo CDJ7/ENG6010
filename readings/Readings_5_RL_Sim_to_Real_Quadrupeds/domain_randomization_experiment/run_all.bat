@@ -2,7 +2,7 @@
 REM ======================================================================
 REM  run_all.bat - set up the virtual environment and run the full pipeline
 REM  Double-click it, or run it from a Command Prompt in this folder.
-REM  Total time on a laptop CPU: roughly 30-50 minutes.
+REM  Total time on a laptop CPU: roughly 1.5-2.5 hours (7 training runs).
 REM ======================================================================
 setlocal
 cd /d "%~dp0"
@@ -26,8 +26,10 @@ echo [3/6] Quick smoke test ...
 ".venv\Scripts\python.exe" quick_test.py
 if errorlevel 1 goto :error
 
-echo [4/6] Training both controllers (fixed, then randomized) ...
+echo [4/6] Training both controllers, 3 seeds each, then the phase-2 controller ...
 ".venv\Scripts\python.exe" train.py --all --timesteps 1500000
+if errorlevel 1 goto :error
+".venv\Scripts\python.exe" train.py --mode randomized_plus --seed 0 --timesteps 1500000
 if errorlevel 1 goto :error
 
 echo [5/6] Evaluating on all test conditions ...

@@ -47,7 +47,32 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "6. Plots only (from saved results)",
+            "name": "6. Make pictures + GIFs for slides",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/make_media.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "7. Phase 2: train randomized_plus (gains/latency/noise)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/train.py",
+            "args": ["--mode", "randomized_plus", "--seed", "0"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "8. Phase 2: export policy + deployment-loop demo",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/export_and_deploy.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "9. Plots only (from saved results)",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/plot_results.py",
@@ -60,14 +85,15 @@
             "id": "model",
             "type": "pickString",
             "description": "Which controller?",
-            "options": ["fixed", "randomized"],
+            "options": ["fixed", "randomized", "randomized_plus"],
             "default": "fixed"
         },
         {
             "id": "condition",
             "type": "pickString",
             "description": "Which test condition?",
-            "options": ["nominal", "low_friction", "high_friction", "heavy", "light", "weak_motors", "pseudo_real"],
+            "options": ["nominal", "low_friction", "high_friction", "heavy", "light", "weak_motors", "pseudo_real",
+                        "latency_20ms", "latency_40ms", "sensor_noise", "soft_pd_gains", "pseudo_real_plus"],
             "default": "low_friction"
         }
     ]

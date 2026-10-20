@@ -6,6 +6,7 @@ Writes:  results/success_rate_bar.png   (MAIN figure)
          results/gap_summary.png
          results/friction_sweep.png
          results/training_curves.png
+         results/phase2_probes.png      (latency / sensor noise / PD-gain probes)
          results/summary.csv            (also printed to the console)
 
 Error bars: standard deviation across seeds when there are 2+ seeds per controller;
@@ -19,11 +20,14 @@ import pandas as pd
 
 import config as C
 
-COLORS = {"fixed": "#D55E00", "randomized": "#0072B2"}   # colour-blind-safe orange / blue
-LABELS = {"fixed": "Fixed (no randomization)", "randomized": "Domain randomized"}
+COLORS = {"fixed": "#D55E00", "randomized": "#0072B2", "randomized_plus": "#009E73"}  # colour-blind safe
+LABELS = {"fixed": "Fixed (no randomization)", "randomized": "Domain randomized",
+          "randomized_plus": "Randomized + gains/latency/noise (phase 2)"}
 NICE = {"nominal": "Nominal", "low_friction": "Low friction\n0.4x", "high_friction": "High friction\n1.6x",
         "heavy": "Heavy\n1.3x mass", "light": "Light\n0.7x mass", "weak_motors": "Weak motors\n0.6x",
-        "pseudo_real": "Pseudo-real\n(0.6f, 1.25m, 0.75s)"}
+        "pseudo_real": "Pseudo-real\n(0.6f, 1.25m, 0.75s)",
+        "latency_20ms": "Latency\n20 ms", "latency_40ms": "Latency\n40 ms", "sensor_noise": "Sensor noise\n(std 0.05)",
+        "soft_pd_gains": "Soft PD gains\n0.7x", "pseudo_real_plus": "Pseudo-real +\nlatency + noise"}
 
 
 def success_stats(df, group_cols):
@@ -36,7 +40,14 @@ def success_stats(df, group_cols):
     return out
 
 
+def clipped_err(rate, err):
+    """Asymmetric error bars that stay inside 0-100 %, plus the height to put a label at."""
+    lower, upper = np.minimum(err, rate), np.minimum(err, 1 - rate)
+    return np.vstack([lower, upper]), rate + upper
+
+
 def plot_main_bar(df):
+    df = df[df.model.isin(C.MODES)]
     stats = success_stats(df, ["model", "condition"])
     conds = list(C.TEST_CONDITIONS)
     modes = [m for m in C.MODES if m in stats.model.unique()]
@@ -46,21 +57,22 @@ def plot_main_bar(df):
     for k, mode in enumerate(modes):
         s = stats[stats.model == mode].set_index("condition").reindex(conds)
         pos = x + (k - (len(modes) - 1) / 2) * w
-        bars = ax.bar(pos, 100 * s.success_rate, w, yerr=100 * s.err, capsize=3,
+        yerr, tops = clipped_err(s.success_rate.values, s.err.values)
+        bars = ax.bar(pos, 100 * s.success_rate, w, yerr=100 * yerr, capsize=3,
                       color=COLORS[mode], label=LABELS[mode])
-        for b, v, e in zip(bars, s.success_rate, s.err):
-            ax.text(b.get_x() + b.get_width() / 2, 100 * (v + e) + 1, f"{100 * v:.0f}%", ha="center",
+        for b, v, top in zip(bars, s.success_rate, tops):
+            ax.text(b.get_x() + b.get_width() / 2, 100 * top + 1, f"{100 * v:.0f}%", ha="center",
                     va="bottom", fontsize=8, color=COLORS[mode], fontweight="bold")
     ax.set_xticks(x, [NICE.get(c, c) for c in conds], fontsize=9)
     ax.set_ylabel("Success rate (%)")
-    ax.set_ylim(0, 125)
+    ax.set_ylim(0, 110)
     n_seeds = stats.n_seeds.max()
     err_note = "std across seeds" if n_seeds > 1 else "binomial standard error, 1 seed"
     ax.set_title(f"Success rate on shifted physics (success = {C.SUCCESS_DISTANCE:.0f} m in "
                  f"{C.MAX_EPISODE_STEPS * C.CONTROL_DT:.0f} s without falling; error bars: {err_note})",
                  fontsize=10)
     ax.axvspan(-0.5, 0.5, color="0.92", zorder=-1)   # shade the training (nominal) condition
-    ax.legend(loc="upper center", ncol=2, frameon=False)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.14), ncol=2, frameon=False)
     ax.set_yticks(range(0, 101, 20))
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
@@ -69,24 +81,29 @@ def plot_main_bar(df):
 
 
 def plot_gap(df):
+    """For each controller: nominal vs. pseudo-real success, with the gap written above."""
+    df = df[df.model.isin(C.MODES)]
     stats = success_stats(df, ["model", "condition"]).set_index(["model", "condition"])
     modes = [m for m in C.MODES if m in stats.index.get_level_values(0)]
-    fig, ax = plt.subplots(figsize=(7, 4.5))
-    x = np.arange(2)
-    w = 0.38
+    fig, ax = plt.subplots(figsize=(8, 4.8))
+    w = 0.36
     for k, mode in enumerate(modes):
-        vals = [100 * stats.loc[(mode, "nominal"), "success_rate"], 100 * stats.loc[(mode, "pseudo_real"), "success_rate"]]
-        pos = x + (k - (len(modes) - 1) / 2) * w
-        ax.bar(pos, vals, w, color=COLORS[mode], label=LABELS[mode])
-        ax.annotate("", xy=(pos[1], vals[1]), xytext=(pos[0], vals[0]),
-                    arrowprops=dict(arrowstyle="->", color=COLORS[mode], lw=1.5))
-        ax.text(pos[1], vals[1] + 2, f"gap {vals[0] - vals[1]:.0f} pts", ha="center", fontsize=9,
-                color=COLORS[mode], fontweight="bold")
-    ax.set_xticks(x, ["Nominal sim\n(training physics)", "Pseudo-real robot\n(friction 0.6x, mass 1.25x, motor 0.75x)"])
+        nom = 100 * stats.loc[(mode, "nominal"), "success_rate"]
+        real = 100 * stats.loc[(mode, "pseudo_real"), "success_rate"]
+        ax.bar(k - w / 2, nom, w, color=COLORS[mode], alpha=0.35, edgecolor=COLORS[mode])
+        ax.bar(k + w / 2, max(real, 0.8), w, color=COLORS[mode])       # sliver so 0 % stays visible
+        ax.text(k - w / 2, nom + 2, f"{nom:.0f}%", ha="center", fontsize=10, color=COLORS[mode])
+        ax.text(k + w / 2, real + 2, f"{real:.0f}%", ha="center", fontsize=10, color=COLORS[mode],
+                fontweight="bold")
+        ax.text(k, 116, f"gap: {nom - real:.0f} pts", ha="center", fontsize=13, color=COLORS[mode],
+                fontweight="bold")
+    ax.set_xticks(range(len(modes)), [f"{LABELS[m]}\n(light = nominal, dark = pseudo-real)" for m in modes],
+                  fontsize=9)
     ax.set_ylabel("Success rate (%)")
-    ax.set_ylim(0, 112)
-    ax.set_title("Sim-to-'real' gap: success drop from nominal to pseudo-real", fontsize=11)
-    ax.legend(loc="lower left")
+    ax.set_ylim(0, 125)
+    ax.set_yticks(range(0, 101, 20))
+    ax.set_title("Sim-to-'real' gap: nominal sim vs. pseudo-real robot\n"
+                 "(friction 0.6x, mass 1.25x, motor 0.75x)", fontsize=11)
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     fig.savefig(C.RESULTS_DIR / "gap_summary.png", dpi=150)
@@ -99,6 +116,7 @@ def plot_sweep():
         print("friction_sweep.csv not found - skipping friction_sweep.png")
         return
     sw = pd.read_csv(path)
+    sw = sw[sw.model.isin(C.MODES)]
     stats = success_stats(sw, ["model", "friction_scale"])
     fig, ax = plt.subplots(figsize=(7.5, 4.5))
     lo, hi = C.RANDOMIZATION_RANGES["friction_scale"]
@@ -134,7 +152,7 @@ def plot_training_curves():
         return
     logs = pd.concat(logs)
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.3))
-    for mode in [m for m in C.MODES if m in logs.model.unique()]:
+    for mode in [m for m in C.ALL_MODES if m in logs.model.unique()]:
         lg = logs[logs.model == mode]
         for ax, col in zip(axes, ["mean_episode_reward", "mean_distance"]):
             g = lg.groupby("timesteps")[col]
@@ -157,28 +175,66 @@ def plot_training_curves():
     plt.close(fig)
 
 
+def plot_probes(df):
+    """Phase-2 probes: effects nobody in the main experiment was randomized over."""
+    if "group" not in df.columns or not (df.group == "phase2_probe").any():
+        return
+    conds = ["nominal", "pseudo_real"] + list(C.PROBE_CONDITIONS)
+    sub = df[df.condition.isin(conds)]
+    stats = success_stats(sub, ["model", "condition"])
+    modes = [m for m in C.ALL_MODES if m in stats.model.unique()]
+    x = np.arange(len(conds))
+    w = 0.8 / len(modes)
+    fig, ax = plt.subplots(figsize=(12, 5))
+    for k, mode in enumerate(modes):
+        s = stats[stats.model == mode].set_index("condition").reindex(conds)
+        pos = x + (k - (len(modes) - 1) / 2) * w
+        yerr, tops = clipped_err(s.success_rate.values, s.err.values)
+        n_seeds = int(s.n_seeds.max())
+        label = f"{LABELS[mode]} ({n_seeds} seed{'s' if n_seeds > 1 else ''})"
+        ax.bar(pos, 100 * s.success_rate, w, yerr=100 * yerr, capsize=2, color=COLORS[mode], label=label)
+        for p_, v, top in zip(pos, s.success_rate, tops):
+            ax.text(p_, 100 * top + 1.5, f"{100 * v:.0f}", ha="center", fontsize=8, color=COLORS[mode],
+                    fontweight="bold")
+    ax.axvline(1.5, color="0.5", ls="--", lw=1)
+    ax.text(1.55, 112, "phase-2 probes: effects NOT randomized in the main experiment ->", fontsize=8, color="0.3")
+    ax.set_xticks(x, [NICE.get(c, c) for c in conds], fontsize=8)
+    ax.set_ylabel("Success rate (%)")
+    ax.set_ylim(0, 125)
+    ax.set_yticks(range(0, 101, 20))
+    ax.set_title("What the next phase needs: latency, sensor noise and gain changes\n"
+                 "(error bars: std across seeds, or binomial standard error for a single seed)", fontsize=11)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=3, frameon=False, fontsize=9)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(C.RESULTS_DIR / "phase2_probes.png", dpi=150)
+    plt.close(fig)
+
+
 def summary_table(df):
     stats = success_stats(df, ["model", "condition"])
     dist = df.groupby(["model", "condition"]).agg(mean_distance=("distance", "mean"),
                                                   fall_rate=("fell", "mean"),
                                                   mean_reward=("reward", "mean")).reset_index()
     table = stats.merge(dist, on=["model", "condition"])
-    order = {c: i for i, c in enumerate(C.TEST_CONDITIONS)}
+    order = {c: i for i, c in enumerate(list(C.TEST_CONDITIONS) + list(C.PROBE_CONDITIONS))}
     table = table.sort_values(["condition", "model"], key=lambda s: s.map(order) if s.name == "condition" else s)
     table = table[["condition", "model", "success_rate", "err", "mean_distance", "fall_rate",
                    "mean_reward", "n_seeds", "n_eps"]]
     table.to_csv(C.RESULTS_DIR / "summary.csv", index=False, float_format="%.4f")
 
-    pivot = table.pivot(index="condition", columns="model", values="success_rate").reindex(list(C.TEST_CONDITIONS))
+    pivot = table.pivot(index="condition", columns="model", values="success_rate")
+    pivot = pivot.reindex([c for c in order if c in pivot.index])
+    pivot = pivot[[m for m in C.ALL_MODES if m in pivot.columns]]
     print("\nSuccess rate per test condition")
-    print("-" * 52)
-    print(f"{'condition':<16s}" + "".join(f"{m:>14s}" for m in pivot.columns))
+    print("-" * (16 + 18 * len(pivot.columns)))
+    print(f"{'condition':<16s}" + "".join(f"{m:>18s}" for m in pivot.columns))
     for cond, row in pivot.iterrows():
-        print(f"{cond:<16s}" + "".join(f"{100 * v:13.1f}%" for v in row.values))
+        print(f"{cond:<16s}" + "".join(f"{100 * v:17.1f}%" for v in row.values))
     if {"nominal", "pseudo_real"} <= set(pivot.index):
         gap = 100 * (pivot.loc["nominal"] - pivot.loc["pseudo_real"])
-        print("-" * 52)
-        print(f"{'gap (nom-real)':<16s}" + "".join(f"{v:12.1f}pt" for v in gap.values))
+        print("-" * (16 + 18 * len(pivot.columns)))
+        print(f"{'gap (nom-real)':<16s}" + "".join(f"{v:16.1f}pt" for v in gap.values))
     print(f"\nFull table saved to {C.RESULTS_DIR / 'summary.csv'}")
 
 
@@ -191,5 +247,6 @@ if __name__ == "__main__":
     plot_gap(df)
     plot_sweep()
     plot_training_curves()
+    plot_probes(df)
     summary_table(df)
     print("Plots written to", C.RESULTS_DIR)

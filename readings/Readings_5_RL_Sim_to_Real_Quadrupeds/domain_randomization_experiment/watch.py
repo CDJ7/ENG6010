@@ -76,8 +76,9 @@ def record_mp4(model, vecnorm, env, out_path, ep_seed: int):
 if __name__ == "__main__":
     torch.set_num_threads(1)
     parser = argparse.ArgumentParser(description="Watch a trained controller")
-    parser.add_argument("--model", choices=C.MODES, default="randomized")
-    parser.add_argument("--condition", choices=list(C.TEST_CONDITIONS), default="nominal")
+    parser.add_argument("--model", choices=C.ALL_MODES, default="randomized")
+    all_conditions = {**C.TEST_CONDITIONS, **C.PROBE_CONDITIONS}
+    parser.add_argument("--condition", choices=list(all_conditions), default="nominal")
     parser.add_argument("--seed", type=int, default=None, help="training seed of the model (default: first found)")
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--episode-seed", type=int, default=C.EVAL_SEED)
@@ -86,7 +87,7 @@ if __name__ == "__main__":
 
     mode, seed, run_dir = pick_run(args.model, args.seed)
     model, vecnorm = load_policy(run_dir)
-    physics = C.TEST_CONDITIONS[args.condition]
+    physics = all_conditions[args.condition]
     env = WalkerEnv(physics=physics)
     print(f"Model: {run_dir.name} | condition: {args.condition} {physics}")
     out = C.VIDEOS_DIR / f"{mode}_seed{seed}_{args.condition}.mp4"
