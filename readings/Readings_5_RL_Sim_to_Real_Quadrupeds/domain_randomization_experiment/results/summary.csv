@@ -1,0 +1,15 @@
+condition,model,success_rate,err,mean_distance,fall_rate,mean_reward,n_seeds,n_eps
+nominal,fixed,1.0000,0.0000,12.7836,0.0000,1233.7209,1,50
+nominal,randomized,1.0000,0.0000,13.2501,0.0000,1229.0659,1,50
+low_friction,fixed,0.0000,0.0000,0.2982,1.0000,42.6677,1,50
+low_friction,randomized,1.0000,0.0000,13.3805,0.0000,1216.9163,1,50
+high_friction,fixed,1.0000,0.0000,12.9526,0.0000,1233.8627,1,50
+high_friction,randomized,1.0000,0.0000,12.7049,0.0000,1228.1714,1,50
+heavy,fixed,0.0200,0.0198,1.5640,0.9800,178.3224,1,50
+heavy,randomized,1.0000,0.0000,12.4368,0.0000,1226.4158,1,50
+light,fixed,1.0000,0.0000,13.4924,0.0000,1234.8271,1,50
+light,randomized,1.0000,0.0000,13.0554,0.0000,1228.9625,1,50
+weak_motors,fixed,0.0000,0.0000,0.5126,1.0000,74.8978,1,50
+weak_motors,randomized,1.0000,0.0000,8.6271,0.0000,1109.4948,1,50
+pseudo_real,fixed,0.0000,0.0000,0.6099,1.0000,83.0069,1,50
+pseudo_real,randomized,1.0000,0.0000,10.1738,0.0000,1211.7081,1,50

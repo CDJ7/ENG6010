@@ -1,0 +1,11 @@
+# Pinned, Windows-compatible versions (all ship pre-built wheels for Python 3.10-3.12).
+# Nothing here needs a compiler, WSL, or Linux.
+mujoco==3.2.7
+gymnasium==1.0.0
+stable-baselines3==2.4.1
+torch==2.5.1
+numpy==1.26.4
+pandas==2.2.3
+matplotlib==3.9.2
+imageio==2.36.0
+imageio-ffmpeg==0.5.1
