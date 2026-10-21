@@ -5,4 +5,4 @@ its code, report, and written work.
 
 | Homework | Topic | Folder |
 |----------|-------|--------|
-| _(none added yet)_ | | |
+| Homework 4 | Deep Learning, CNNs & Architectures (custom CNN + ResNet-18 transfer learning) | [`Homework_4/`](Homework_4/) |
