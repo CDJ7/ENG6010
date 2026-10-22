@@ -6,7 +6,7 @@ ENG 6010: AI in Robotics (Instructor: Dr. Hongbo Zhang). Total: 100 points.
 
 | File | Description |
 |------|-------------|
-| [`HW4.pdf`](HW4.pdf) | The assignment handout (Parts I–III) |
+| [`ENG6010_HW4_Solutions.docx`](ENG6010_HW4_Solutions.docx) | My written solutions for Parts I–III (derivations, hand calculations, parameter counts) |
 | [`custom_cnn.py`](custom_cnn.py) | **Problem 3.1, Part A:** a custom 3-layer CNN (`Conv2d` / `MaxPool2d` / `Linear`) trained on CIFAR-10 with `CrossEntropyLoss` and Adam |
 | [`transfer_learning_resnet18.py`](transfer_learning_resnet18.py) | **Problem 3.1, Part B:** transfer learning with a pre-trained ResNet-18. The backbone is frozen (`requires_grad = False`) and a new 10-class head is trained |
 | [`Section_3_Code_Explanation.md`](Section_3_Code_Explanation.md) | A walkthrough of the Section III code: architecture, shapes and parameter counts, data pipeline, training loop, and a comparison of the two approaches |
