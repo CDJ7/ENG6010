@@ -1,0 +1,59 @@
+
+=== seed 0 ===
+[1] collected 10000 random transitions
+[2] training world model
+    world model (plain): 10000 transitions, final train 0.0005, val 0.0005
+    world model (symlog): 10000 transitions, final train 0.0005, val 0.0006
+[5] distilling CEM planner into a policy (BC + DAgger)
+    BC        |   600 labelled states | loss 0.2664 | return  -1551.6 +/-   29.2
+    DAgger 1  |  1200 labelled states | loss 0.1403 | return   -236.7 +/-  112.2
+    DAgger 2  |  1800 labelled states | loss 0.1505 | return   -214.8 +/-  125.3
+    DAgger 3  |  2400 labelled states | loss 0.1221 | return   -194.2 +/-   89.8
+    DAgger 4  |  3000 labelled states | loss 0.1191 | return   -193.4 +/-   89.1
+[6] evaluating controllers
+    Random               return  -1094.1 +/-  263.6 |    0.004 ms/decision
+    Random-shooting MPC  return   -148.5 +/-   45.2 |   26.015 ms/decision
+    CEM MPC              return   -149.7 +/-   44.5 |   40.525 ms/decision
+    Distilled policy     return   -149.4 +/-   44.8 |    0.085 ms/decision
+
+=== seed 1 ===
+[1] collected 10000 random transitions
+[2] training world model
+    world model (plain): 10000 transitions, final train 0.0005, val 0.0009
+[5] distilling CEM planner into a policy (BC + DAgger)
+    BC        |   600 labelled states | loss 0.2962 | return  -1549.3 +/-   25.1
+    DAgger 1  |  1200 labelled states | loss 0.2310 | return    -74.9 +/-   61.0
+    DAgger 2  |  1800 labelled states | loss 0.2631 | return    -74.9 +/-   60.9
+    DAgger 3  |  2400 labelled states | loss 0.1798 | return    -74.6 +/-   60.8
+    DAgger 4  |  3000 labelled states | loss 0.2394 | return    -74.3 +/-   60.6
+[6] evaluating controllers
+    Random               return  -1231.4 +/-  231.8 |    0.004 ms/decision
+    Random-shooting MPC  return   -218.5 +/-  117.4 |   26.431 ms/decision
+    CEM MPC              return   -169.5 +/-   56.3 |   41.300 ms/decision
+    Distilled policy     return   -197.7 +/-  100.2 |    0.120 ms/decision
+
+=== seed 2 ===
+[1] collected 10000 random transitions
+[2] training world model
+    world model (plain): 10000 transitions, final train 0.0006, val 0.0007
+[5] distilling CEM planner into a policy (BC + DAgger)
+    BC        |   600 labelled states | loss 0.1917 | return   -907.2 +/-  336.6
+    DAgger 1  |  1200 labelled states | loss 0.2549 | return  -1542.7 +/-   59.3
+    DAgger 2  |  1800 labelled states | loss 0.2593 | return  -1417.7 +/-  159.2
+    DAgger 3  |  2400 labelled states | loss 0.1316 | return   -155.6 +/-  193.2
+    DAgger 4  |  3000 labelled states | loss 0.1399 | return   -152.1 +/-  186.6
+[6] evaluating controllers
+    Random               return  -1189.5 +/-  260.1 |    0.004 ms/decision
+    Random-shooting MPC  return   -195.1 +/-   96.6 |   27.250 ms/decision
+    CEM MPC              return   -145.9 +/-   46.0 |   41.929 ms/decision
+    Distilled policy     return   -173.3 +/-   62.2 |    0.083 ms/decision
+
+[7] plots
+
+=== final results (pooled over seeds) ===
+Random               return  -1171.7 +/-  258.7 |    0.004 ms/decision
+Random-shooting MPC  return   -187.4 +/-   96.1 |   26.566 ms/decision
+CEM MPC              return   -155.0 +/-   50.3 |   41.252 ms/decision
+Distilled policy     return   -173.5 +/-   75.5 |    0.096 ms/decision
+policy is 430x faster than CEM, normalised score 0.982
+total runtime 10.8 min -> results/
