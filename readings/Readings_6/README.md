@@ -33,6 +33,10 @@ Readings_6/
 ├── README.md               this file
 ├── Program_Explanation.md  written explanation of the program (assignment section)
 ├── Results.md              plots, results table and discussion (assignment section)
+├── Readings_6_Presentation.pptx  15-slide deck: how the code works and how it ties to the readings
+├── presentation/
+│   ├── make_presentation.py      builds the deck with python-pptx from results/summary.json
+│   └── icons/                    slide icons (PNG)
 ├── requirements.txt        pinned package versions
 ├── config.py               every hyperparameter in one place (like DreamerV3's configs.yaml)
 ├── utils.py                symlog/symexp, seeding, decision-time stopwatch, env factory
@@ -79,6 +83,8 @@ python main.py --symlog   # same experiment with DreamerV3 symlog world-model ta
 python main.py --mbrl-rounds 2   # turn on the model-based RL loop (collect with CEM, retrain)
 python main.py --seeds 0  # a single seed
 python main.py --no-gif   # skip rendering
+
+python presentation/make_presentation.py   # rebuild Readings_6_Presentation.pptx from results/
 ```
 
 All randomness (NumPy, PyTorch, environment start states, planner sampling) is seeded, so re-running gives the same returns. Decision times naturally depend on the CPU. PyTorch runs on a single thread (`config.torch_threads = 1`) so the timing comparison is fair and repeatable.
