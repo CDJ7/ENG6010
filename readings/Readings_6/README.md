@@ -33,9 +33,11 @@ Readings_6/
 ├── README.md               this file
 ├── Program_Explanation.md  written explanation of the program (assignment section)
 ├── Results.md              plots, results table and discussion (assignment section)
-├── Readings_6_Presentation.pptx  15-slide deck: how the code works and how it ties to the readings
+├── Readings_6_Presentation.pptx  15-slide static deck: how the code works and how it ties to the readings
 ├── presentation/
-│   ├── make_presentation.py      builds the deck with python-pptx from results/summary.json
+│   ├── interactive_presentation.py  the live, animated talk (pygame): models run on the slides
+│   ├── make_presentation.py      builds the .pptx with python-pptx from results/summary.json
+│   ├── screenshots/              previews of the interactive slides
 │   └── icons/                    slide icons (PNG)
 ├── requirements.txt        pinned package versions
 ├── config.py               every hyperparameter in one place (like DreamerV3's configs.yaml)
@@ -86,6 +88,37 @@ python main.py --no-gif   # skip rendering
 
 python presentation/make_presentation.py   # rebuild Readings_6_Presentation.pptx from results/
 ```
+
+---
+
+## Interactive presentation
+
+`python presentation/interactive_presentation.py` (add `--fullscreen` for presenting) opens the talk as a live Python app. The pendulums on the slides are simulated with the exact Pendulum-v1 physics and controlled *in real time* by the networks that `main.py` saved in `results/models/`. Every reported number is read from `results/summary.json`.
+
+Navigation: **→ / Space** next, **←** back, **F** fullscreen, **Esc** quit. Each slide shows its own keys at the bottom.
+
+| Slide | What is live | Interaction | Reading |
+|---|---|---|---|
+| Title | Distilled policy balancing the pendulum | Click / K: kick it | LeCun Mode-1 |
+| Four readings | Cards animate in | Hover: where each idea lives in the code | all four |
+| You are the controller | Pendulum-v1 with a live cost breakdown | Hold A / D for torque, T: hand over to the policy | LeCun intrinsic cost |
+| Mode-2 thinks, Mode-1 reacts | Data flowing through both modes, 50 ms budget bar | 1 / 2 / 0: focus a mode | LeCun Mode-1/Mode-2 |
+| Pipeline | The six stages light up in turn | Click a stage to pin it | all |
+| Compounding error | Real pendulum vs the world model's open-loop guess | N: new run, S: re-sync every H steps (MPC), ↑/↓: H | DWM Fig. 1.1, DreamerV3 |
+| Watching CEM imagine | All 300 imagined plans, the 30 elites and the chosen plan, on the pendulum and as angle vs time | S: slow-motion CEM iterations, H: horizon 5/15/30, K: kick | LeCun Mode-2, DreamerV3 `imag_length` |
+| DAgger | Training loop animation, chart revealed per iteration | D: next iteration, A: all | LeCun Fig. 5 |
+| The race | Random, random shooting, CEM and policy from the same start, live ms/decision | K / click: kick all four | DWM fast deployment |
+| Results | Animated bars from `summary.json` | L: linear / log time axis | all |
+| Back to the readings | Claim vs observed flip cards | 1-4 / click: flip | all |
+| Takeaway | Policy balancing | Click: kick it, it recovers | LeCun Fig. 5 |
+
+![Watching the CEM planner imagine](presentation/screenshots/imagination.png)
+
+![Compounding error with MPC re-sync](presentation/screenshots/compounding_error.png)
+
+![The race](presentation/screenshots/race.png)
+
+`python presentation/interactive_presentation.py --screenshots DIR` renders every slide to PNG without opening a window.
 
 All randomness (NumPy, PyTorch, environment start states, planner sampling) is seeded, so re-running gives the same returns. Decision times naturally depend on the CPU. PyTorch runs on a single thread (`config.torch_threads = 1`) so the timing comparison is fair and repeatable.
 
