@@ -120,6 +120,15 @@ Navigation: **→ / Space** next, **←** back, **F** fullscreen, **Esc** quit. 
 
 `python presentation/interactive_presentation.py --screenshots DIR` renders every slide to PNG without opening a window.
 
+### Running it from VS Code (Windows)
+
+1. **File → Open Folder…** and pick `readings/Readings_6` itself (not the repo root), so VS Code reads `.vscode/`.
+2. First time only: double-click `run_presentation.bat` (or run it in the VS Code terminal). It creates `.venv`, installs the packages and starts the talk. Press Esc to close it.
+3. **Ctrl+Shift+P → Python: Select Interpreter** → choose `.venv` (the settings file already points there).
+4. Open **Run and Debug** (Ctrl+Shift+D), pick **Presentation (fullscreen)** or **Presentation (window, for rehearsing)**, and press **Ctrl+F5** (Run Without Debugging; F5 also works but the debugger slows the planner slides).
+
+The same menu also has *start on a chosen slide*, `main.py`, `main.py --quick` and *rebuild the .pptx backup*.
+
 All randomness (NumPy, PyTorch, environment start states, planner sampling) is seeded, so re-running gives the same returns. Decision times naturally depend on the CPU. PyTorch runs on a single thread (`config.torch_threads = 1`) so the timing comparison is fair and repeatable.
 
 ---

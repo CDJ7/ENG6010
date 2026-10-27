@@ -1,0 +1,73 @@
+{
+    // Run these from the "Run and Debug" panel (Ctrl+Shift+D).
+    // Use Ctrl+F5 (Run Without Debugging) when presenting: the debugger slows the planners.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Presentation (fullscreen)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/presentation/interactive_presentation.py",
+            "args": ["--fullscreen"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Presentation (window, for rehearsing)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/presentation/interactive_presentation.py",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Presentation (start on a chosen slide)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/presentation/interactive_presentation.py",
+            "args": ["--start", "${input:slideNumber}"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Full pipeline: main.py (retrains, about 11-15 min)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Quick test: main.py --quick",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": ["--quick"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Rebuild the .pptx backup",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/presentation/make_presentation.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ],
+    "inputs": [
+        {
+            "id": "slideNumber",
+            "type": "promptString",
+            "description": "Slide number to start on (1-12)",
+            "default": "1"
+        }
+    ]
+}
