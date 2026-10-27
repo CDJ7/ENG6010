@@ -72,7 +72,7 @@ Readings_6/
 
 ## Install and run
 
-Python 3.10+ works; the reported run used Python 3.13 on CPU only.
+Use **Python 3.12, 3.13 or 3.14** (3.13 recommended; the reported run used 3.13 on CPU only). **Python 3.15 does not work yet** because PyTorch has no build for it. You can have several Python versions installed side by side; `run_presentation.bat` picks a compatible one automatically.
 
 ```bash
 cd readings/Readings_6
@@ -127,7 +127,7 @@ Navigation: **→ / Space** next, **←** back, **F** fullscreen, **Esc** quit. 
 The folder includes `Readings_6.sln` and `Readings_6.pyproj`, whose start file is the interactive presentation.
 
 1. In the Visual Studio Installer, make sure the **Python development** workload is installed.
-2. First time only: double-click `run_presentation.bat`. It creates `.venv`, installs the packages and opens the talk once (Esc to close).
+2. First time only: install Python 3.13 from python.org if you don't have 3.12-3.14, then double-click `run_presentation.bat`. It creates `.venv` with a compatible Python, installs the packages and opens the talk once (Esc to close).
 3. Open `Readings_6.sln` in Visual Studio. In Solution Explorer, **Python Environments** should show `.venv` as the active environment.
 4. Press **Ctrl+F5** (Start Without Debugging). F5 also works, but the debugger slows the planner slides.
 

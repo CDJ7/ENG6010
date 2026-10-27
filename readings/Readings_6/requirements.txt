@@ -1,12 +1,18 @@
-# Pinned versions used for the reported run (Python 3.13, CPU only).
-# For a smaller CPU-only PyTorch install:
+# Pinned versions used for the reported run (CPU only).
+# Use Python 3.12, 3.13 (recommended, used for the reported run) or 3.14.
+# Python 3.15 does NOT work yet: PyTorch has no build for it.
+# On Windows the PyPI torch wheel is already the CPU-only build.
+# On Linux, a much smaller CPU-only download:
 #   pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
 torch==2.14.1
-gymnasium[classic-control]==1.4.0
+gymnasium==1.4.0
 numpy==2.5.3
 matplotlib==3.11.2
 imageio==2.38.1
-pygame==2.6.1
+# pygame-ce is the community edition of pygame: same `import pygame`, and it
+# ships ready-made wheels for new Python versions (classic pygame 2.6.1 does
+# not for 3.14+, so pip would try, and fail, to compile it).
+pygame-ce==2.5.8
 # only for presentation/make_presentation.py
 python-pptx==1.0.2
 pillow==12.3.0
