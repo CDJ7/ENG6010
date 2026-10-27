@@ -11,6 +11,9 @@ the world model, CEM planner and distilled policy that main.py trained
     python presentation/interactive_presentation.py     # start the talk
     python presentation/interactive_presentation.py --fullscreen
 
+The app draws at your screen's native resolution (and is DPI-aware on
+Windows), so text and lines stay sharp at any window size or in fullscreen.
+
 Global keys
     Right / Space / PageDown   next slide         Left / PageUp   previous slide
     F                          toggle fullscreen  Esc             quit
@@ -103,8 +106,128 @@ def fmt_num(v, f=".0f"):
     return format(v, f).replace("-", "−")
 
 
+class View:
+    """Maps the 1280x720 design canvas onto the real window.
+
+    Every slide is laid out in 1280x720 "design units". Instead of drawing a
+    small 1280x720 image and stretching it (which looks blurry on a large or
+    high-DPI screen), all coordinates, line widths and font sizes are
+    multiplied by `k` at draw time, so everything is rendered at the screen's
+    native resolution. (ox, oy) letterbox the 16:9 canvas on other aspect ratios.
+    """
+
+    k, ox, oy = 1.0, 0.0, 0.0
+
+    @classmethod
+    def fit(cls, w, h):
+        cls.k = min(w / W, h / H)
+        cls.ox, cls.oy = (w - W * cls.k) / 2, (h - H * cls.k) / 2
+
+
+def P(p):
+    """Design-space point -> screen pixels."""
+    return (View.ox + p[0] * View.k, View.oy + p[1] * View.k)
+
+
+def PX(v):
+    """Design-space length -> pixels (at least 1)."""
+    return max(1, int(round(v * View.k)))
+
+
+def RECT(r):
+    x, y = P((r[0], r[1]))
+    return pygame.Rect(round(x), round(y), round(r[2] * View.k), round(r[3] * View.k))
+
+
+def to_design(pos):
+    """Screen pixels (mouse) -> design-space point."""
+    return ((pos[0] - View.ox) / View.k, (pos[1] - View.oy) / View.k)
+
+
+class local_origin:
+    """Draw into an off-screen card surface whose top-left is design (0, 0)."""
+
+    def __enter__(self):
+        self.saved = (View.ox, View.oy)
+        View.ox = View.oy = 0.0
+
+    def __exit__(self, *exc):
+        View.ox, View.oy = self.saved
+        return False
+
+
+class sublayer:
+    """Transparent layer covering only `rect` (design units), for translucent drawing.
+
+        with sublayer(screen, (x, y, w, h), alpha=120) as ov:
+            draw.lines(ov, ...)      # same design coordinates as usual
+
+    Only that region is allocated and blitted, which keeps full-resolution
+    rendering fast. `alpha` fades the whole layer when it is blitted.
+    """
+
+    def __init__(self, surf, rect, alpha=None):
+        self.surf, self.rect, self.alpha = surf, rect, alpha
+
+    def __enter__(self):
+        self.r = RECT(self.rect).clip(self.surf.get_rect())
+        self.layer = pygame.Surface((max(1, self.r.w), max(1, self.r.h)), pygame.SRCALPHA)
+        self.saved = (View.ox, View.oy)
+        View.ox, View.oy = View.ox - self.r.x, View.oy - self.r.y
+        return self.layer
+
+    def __exit__(self, *exc):
+        View.ox, View.oy = self.saved
+        if self.alpha is not None:
+            self.layer.set_alpha(self.alpha)
+        self.surf.blit(self.layer, self.r.topleft)
+        return False
+
+
+class draw:
+    """pygame.draw with design-space coordinates."""
+
+    @staticmethod
+    def rect(surf, color, rect, width=0, border_radius=0, **radii):
+        radii = {k: int(round(v * View.k)) for k, v in radii.items()}
+        pygame.draw.rect(surf, color, RECT(rect), PX(width) if width else 0,
+                         border_radius=int(round(border_radius * View.k)), **radii)
+
+    @staticmethod
+    def line(surf, color, p1, p2, width=1):
+        pygame.draw.line(surf, color, P(p1), P(p2), PX(width))
+
+    @staticmethod
+    def lines(surf, color, closed, pts, width=1):
+        # vectorised: the CEM slide draws hundreds of polylines per frame
+        xy = np.asarray(pts, dtype=float) * View.k + (View.ox, View.oy)
+        pygame.draw.lines(surf, color, closed, xy.tolist(), PX(width))
+
+    @staticmethod
+    def aalines(surf, color, closed, pts):
+        xy = np.asarray(pts, dtype=float) * View.k + (View.ox, View.oy)
+        pygame.draw.aalines(surf, color, closed, xy.tolist())
+
+    @staticmethod
+    def circle(surf, color, center, r, width=0):
+        pygame.draw.circle(surf, color, P(center), r * View.k, PX(width) if width else 0)
+
+    @staticmethod
+    def arc(surf, color, rect, a0, a1, width=1):
+        pygame.draw.arc(surf, color, RECT(rect), a0, a1, PX(width))
+
+
+class gfx:
+    """pygame.gfxdraw (anti-aliased) with design-space coordinates."""
+
+    @staticmethod
+    def filled_circle(surf, x, y, r, color):
+        cx, cy = P((x, y))
+        pygame.gfxdraw.filled_circle(surf, int(cx), int(cy), PX(r), color)
+
+
 class Fonts:
-    """Font cache. Calibri/Segoe on Windows, Carlito/DejaVu/Arial elsewhere."""
+    """Font cache keyed by *pixel* size. Calibri/Segoe on Windows, Carlito/DejaVu/Arial elsewhere."""
 
     SANS = "calibri,carlito,segoeui,helveticaneue,arial,dejavusans"
     MONO = "consolas,menlo,dejavusansmono,couriernew,freemono"
@@ -113,30 +236,43 @@ class Fonts:
         self.cache = {}
 
     def get(self, size, bold=False, mono=False):
-        key = (size, bold, mono)
+        """`size` is in design units; the font is created at the scaled pixel size."""
+        px = max(6, int(round(size * View.k)))
+        key = (px, bold, mono)
         if key not in self.cache:
-            self.cache[key] = pygame.font.SysFont(self.MONO if mono else self.SANS, size, bold=bold)
+            self.cache[key] = pygame.font.SysFont(self.MONO if mono else self.SANS, px, bold=bold)
         return self.cache[key]
 
 
 FONTS = None
 
 
+class TextBox:
+    """Size of rendered text in design units (what callers lay out with)."""
+
+    def __init__(self, w, h):
+        self.width, self.height = w, h
+
+
+def text_width(s, size, bold=False, mono=False):
+    return FONTS.get(size, bold, mono).size(s)[0] / View.k
+
+
 def text(surf, s, pos, size=20, color=TEXT, bold=False, mono=False, anchor="topleft", alpha=255):
     img = FONTS.get(size, bold, mono).render(s, True, color)
     if alpha < 255:
         img.set_alpha(alpha)
-    r = img.get_rect(**{anchor: pos})
+    x, y = P(pos)
+    r = img.get_rect(**{anchor: (round(x), round(y))})
     surf.blit(img, r)
-    return r
+    return TextBox(r.width / View.k, r.height / View.k)
 
 
 def wrap(s, size, width, bold=False):
-    f = FONTS.get(size, bold)
     words, lines, cur = s.split(), [], ""
     for w in words:
         t = (cur + " " + w).strip()
-        if f.size(t)[0] <= width:
+        if text_width(t, size, bold) <= width:
             cur = t
         else:
             lines.append(cur)
@@ -155,17 +291,20 @@ def para(surf, s, x, y, width, size=18, color=MUTED, bold=False, gap=4, alpha=25
 
 def rrect(surf, color, rect, radius=14, alpha=None):
     if alpha is None:
-        pygame.draw.rect(surf, color, rect, border_radius=radius)
+        draw.rect(surf, color, rect, border_radius=radius)
     else:
-        tmp = pygame.Surface((rect[2], rect[3]), pygame.SRCALPHA)
-        pygame.draw.rect(tmp, (*color, alpha), (0, 0, rect[2], rect[3]), border_radius=radius)
-        surf.blit(tmp, (rect[0], rect[1]))
+        r = RECT(rect)
+        tmp = pygame.Surface((max(1, r.w), max(1, r.h)), pygame.SRCALPHA)
+        pygame.draw.rect(tmp, (*color, alpha), (0, 0, r.w, r.h), border_radius=int(round(radius * View.k)))
+        surf.blit(tmp, r.topleft)
 
 
 def circle(surf, color, center, r):
-    x, y = int(center[0]), int(center[1])
-    pygame.gfxdraw.aacircle(surf, x, y, int(r), color)
-    pygame.gfxdraw.filled_circle(surf, x, y, int(r), color)
+    """Anti-aliased filled circle."""
+    x, y = P(center)
+    x, y, rr = int(round(x)), int(round(y)), max(1, int(round(r * View.k)))
+    pygame.gfxdraw.aacircle(surf, x, y, rr, color)
+    pygame.gfxdraw.filled_circle(surf, x, y, rr, color)
 
 
 def thick_line(surf, color, p1, p2, width):
@@ -173,7 +312,7 @@ def thick_line(surf, color, p1, p2, width):
     (x1, y1), (x2, y2) = p1, p2
     d = math.hypot(x2 - x1, y2 - y1) or 1.0
     nx, ny = -(y2 - y1) / d * width / 2, (x2 - x1) / d * width / 2
-    pts = [(x1 + nx, y1 + ny), (x2 + nx, y2 + ny), (x2 - nx, y2 - ny), (x1 - nx, y1 - ny)]
+    pts = [P(q) for q in ((x1 + nx, y1 + ny), (x2 + nx, y2 + ny), (x2 - nx, y2 - ny), (x1 - nx, y1 - ny))]
     pygame.gfxdraw.aapolygon(surf, pts, color)
     pygame.gfxdraw.filled_polygon(surf, pts, color)
     circle(surf, color, p1, width / 2)
@@ -181,12 +320,13 @@ def thick_line(surf, color, p1, p2, width):
 
 
 def arrow(surf, color, p1, p2, width=2, head=10):
-    pygame.draw.line(surf, color, p1, p2, width)
+    draw.line(surf, color, p1, p2, width)
     ang = math.atan2(p2[1] - p1[1], p2[0] - p1[0])
     a1 = (p2[0] - head * math.cos(ang - 0.45), p2[1] - head * math.sin(ang - 0.45))
     a2 = (p2[0] - head * math.cos(ang + 0.45), p2[1] - head * math.sin(ang + 0.45))
-    pygame.gfxdraw.aapolygon(surf, [p2, a1, a2], color)
-    pygame.gfxdraw.filled_polygon(surf, [p2, a1, a2], color)
+    tri = [P(p2), P(a1), P(a2)]
+    pygame.gfxdraw.aapolygon(surf, tri, color)
+    pygame.gfxdraw.filled_polygon(surf, tri, color)
 
 
 _icon_cache = {}
@@ -194,12 +334,14 @@ _icon_cache = {}
 
 def icon(surf, name, center, d, color):
     circle(surf, color, center, d / 2)
-    key = (name, int(d * 0.52))
+    px = PX(d * 0.52)
+    key = (name, px)
     if key not in _icon_cache:
         img = pygame.image.load(os.path.join(ICONS, name + ".png")).convert_alpha()
-        _icon_cache[key] = pygame.transform.smoothscale(img, (key[1], key[1]))
+        _icon_cache[key] = pygame.transform.smoothscale(img, (px, px))
     img = _icon_cache[key]
-    surf.blit(img, img.get_rect(center=(int(center[0]), int(center[1]))))
+    x, y = P(center)
+    surf.blit(img, img.get_rect(center=(int(round(x)), int(round(y)))))
 
 
 # ============================================================ the pendulum
@@ -245,9 +387,9 @@ class Pendulum:
 
 
 def tip_pts(cs, center, R):
-    """Pendulum-tip screen points for an array of (cos, sin) rows, as plain floats."""
+    """Pendulum-tip points (design units) for an array of (cos, sin) rows."""
     cs = np.asarray(cs, dtype=float).reshape(-1, 2)
-    return np.stack([center[0] + R * cs[:, 1], center[1] - R * cs[:, 0]], 1).tolist()
+    return np.stack([center[0] + R * cs[:, 1], center[1] - R * cs[:, 0]], 1)
 
 
 def draw_pendulum(surf, center, R, cos_sin, color, width=None, pivot=True, torque=0.0, alpha=None):
@@ -258,10 +400,9 @@ def draw_pendulum(surf, center, R, cos_sin, color, width=None, pivot=True, torqu
     width = width or max(6, int(R * 0.11))
     if alpha is not None:
         # draw opaque on a transparent layer, then fade the whole layer
-        tmp = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
-        thick_line(tmp, color, (cx, cy), tip, width)
-        tmp.set_alpha(alpha)
-        surf.blit(tmp, (0, 0))
+        m = R + width
+        with sublayer(surf, (cx - m, cy - m, 2 * m, 2 * m), alpha) as tmp:
+            thick_line(tmp, color, (cx, cy), tip, width)
     else:
         thick_line(surf, color, (cx, cy), tip, width)
     if pivot:
@@ -272,8 +413,7 @@ def draw_pendulum(surf, center, R, cos_sin, color, width=None, pivot=True, torqu
         span = math.radians(150) * abs(torque) / 2.0
         start = math.pi / 2
         a0, a1 = (start, start + span) if torque > 0 else (start - span, start)
-        rect = pygame.Rect(cx - r, cy - r, 2 * r, 2 * r)
-        pygame.draw.arc(surf, MUTED, rect, a0, a1, 3)
+        draw.arc(surf, MUTED, (cx - r, cy - r, 2 * r, 2 * r), a0, a1, 3)
     return tip
 
 
@@ -477,7 +617,7 @@ class TitleSlide(Slide, SimMixin):
                  ("15-step imagination", AMBER)]
         x = 80
         for lab, col in chips:
-            w = FONTS.get(20, True).size(lab)[0] + 40
+            w = text_width(lab, 20, True) + 40
             rrect(s, CARD, (x, 420 + 20 * (1 - a), w, 46), 23)
             text(s, lab, (x + w / 2, 443 + 20 * (1 - a)), 20, col, True, anchor="center", alpha=int(255 * a))
             x += w + 14
@@ -489,7 +629,7 @@ class TitleSlide(Slide, SimMixin):
         for i, cs in enumerate(self.trail):
             al = int(120 * (i + 1) / len(self.trail))
             tmp = (cx + R * cs[1], cy - R * cs[0])
-            pygame.gfxdraw.filled_circle(s, int(tmp[0]), int(tmp[1]), 3, (*TEAL, al))
+            gfx.filled_circle(s, int(tmp[0]), int(tmp[1]), 3, (*TEAL, al))
         draw_pendulum(s, (cx, cy), R, self.p.obs()[:2], TEAL, 18, torque=self.p.u)
 
 
@@ -513,7 +653,7 @@ class ReadingsSlide(Slide):
     ]
 
     def draw(self, s):
-        mx, my = pygame.mouse.get_pos()
+        mx, my = to_design(pygame.mouse.get_pos())
         for i, (ic, col, who, what, pts, code) in enumerate(self.CARDS):
             a = self.appear(0.1 + 0.12 * i)
             x, y, w, h = 60 + i * 296, 160 + 40 * (1 - a), 276, 470
@@ -522,7 +662,7 @@ class ReadingsSlide(Slide):
                 y -= 8
             rrect(s, CARD2 if hover else CARD, (x, y, w, h), 18)
             if hover:
-                pygame.draw.rect(s, col, (x, y, w, h), 2, border_radius=18)
+                draw.rect(s, col, (x, y, w, h), 2, border_radius=18)
             icon(s, ic, (x + 50, y + 55), 60, col)
             text(s, who, (x + 24, y + 100), 24, TEXT, True)
             yy = para(s, what, x + 24, y + 134, w - 44, 17, MUTED)
@@ -581,8 +721,8 @@ class TryItSlide(Slide, SimMixin):
         who = "Distilled policy is driving" if self.auto else "You are driving (A / D)"
         text(s, who, (cx, 182), 20, TEAL if self.auto else AMBER, True, anchor="center")
         # episode timer
-        pygame.draw.rect(s, GRID, (100, 615, 460, 8), border_radius=4)
-        pygame.draw.rect(s, MUTED, (100, 615, int(460 * self.p.steps / 200), 8), border_radius=4)
+        draw.rect(s, GRID, (100, 615, 460, 8), border_radius=4)
+        draw.rect(s, MUTED, (100, 615, int(460 * self.p.steps / 200), 8), border_radius=4)
         text(s, f"step {self.p.steps}/200", (330, 590), 14, MUTED, anchor="center")
 
         x0 = 650
@@ -604,10 +744,10 @@ class TryItSlide(Slide, SimMixin):
         scale = bw / 16.3
         cols = [AMBER, VIOLET, TEAL]
         xx = bx
-        pygame.draw.rect(s, GRID, (bx, y + 92, bw, 26), border_radius=6)
+        draw.rect(s, GRID, (bx, y + 92, bw, 26), border_radius=6)
         for v, c in zip(terms, cols):
             w = v * scale
-            pygame.draw.rect(s, c, (xx, y + 92, max(0, w), 26))
+            draw.rect(s, c, (xx, y + 92, max(0, w), 26))
             xx += w
         text(s, f"cost now {tot:5.2f}   (max 16.3)", (bx, y + 128), 18, MUTED)
         for i, (lab, c) in enumerate([("angle θ²", AMBER), ("speed 0.1·θ̇²", VIOLET), ("effort", TEAL)]):
@@ -717,10 +857,10 @@ class ModesSlide(Slide):
         y = 636
         text(s, "50 ms control period (20 Hz):", (60, y), 16, MUTED)
         bx, bw = 300, 600
-        pygame.draw.rect(s, GRID, (bx, y + 2, bw, 16), border_radius=8)
+        draw.rect(s, GRID, (bx, y + 2, bw, 16), border_radius=8)
         sweep = ease(self.t / 2.0)
-        pygame.draw.rect(s, AMBER, (bx, y + 2, int(bw * self.cem_ms / 50 * sweep), 16), border_radius=8)
-        pygame.draw.rect(s, TEAL, (bx, y + 2, max(3, int(bw * self.pol_ms / 50 * sweep)), 16), border_radius=8)
+        draw.rect(s, AMBER, (bx, y + 2, int(bw * self.cem_ms / 50 * sweep), 16), border_radius=8)
+        draw.rect(s, TEAL, (bx, y + 2, max(3, int(bw * self.pol_ms / 50 * sweep)), 16), border_radius=8)
         text(s, f"CEM uses {100 * self.cem_ms / 50:.0f}%  ·  policy {100 * self.pol_ms / 50:.1f}%", (bx + bw + 14, y), 16, TEXT, True)
 
 
@@ -762,7 +902,7 @@ class PipelineSlide(Slide):
             col = AMBER if i < 4 else TEAL
             rrect(s, CARD2 if on else CARD, (x, y + 30 * (1 - a), w, h), 18)
             if on:
-                pygame.draw.rect(s, col, (x, y, w, h), 2, border_radius=18)
+                draw.rect(s, col, (x, y, w, h), 2, border_radius=18)
             icon(s, ic, (x + 46, y + 46), 52, col if on or self.pinned is None else FAINT)
             text(s, f"{i + 1}. {t}", (x + 86, y + 30), 23, TEXT, True)
             text(s, f_, (x + 24, y + 86), 16, col, mono=True)
@@ -847,7 +987,7 @@ class CompoundingSlide(Slide):
         for tr, col in ((self.trail_r, TEXT), (self.trail_g, AMBER)):
             pts = tip_pts(tr[-30:], (cx, cy), R) if tr else []
             if len(pts) > 1:
-                pygame.draw.aalines(s, col, False, pts)
+                draw.aalines(s, col, False, pts)
         draw_pendulum(s, (cx, cy), R, self.real.obs()[:2], (225, 230, 240), 16)
         draw_pendulum(s, (cx, cy), R, self.ghost[:2], AMBER, 16, pivot=True, alpha=170)
         circle(s, TEXT, (90, 178), 6)
@@ -867,25 +1007,25 @@ class CompoundingSlide(Slide):
         gh = h - 40
         for v in np.linspace(0, top, 5):
             yy = gy0 + gh - gh * v / top
-            pygame.draw.line(s, GRID, (x0 + 40, yy), (x0 + w, yy))
+            draw.line(s, GRID, (x0 + 40, yy), (x0 + w, yy))
             text(s, f"{v:g}", (x0 + 32, yy), 13, MUTED, anchor="midright")
         n = len(self.actions)
         if self.resync:
             for k in range(self.H, n, self.H):
                 xx = x0 + 40 + (w - 40) * k / n
-                pygame.draw.line(s, (60, 80, 70), (xx, gy0), (xx, gy0 + gh), 1)
+                draw.line(s, (60, 80, 70), (xx, gy0), (xx, gy0 + gh), 1)
         pts = [(x0 + 40 + (w - 40) * (i + 1) / n, gy0 + gh - gh * min(e, top) / top) for i, e in enumerate(self.errs)]
         if len(pts) > 1:
-            pygame.draw.lines(s, AMBER, False, pts, 3)
+            draw.lines(s, AMBER, False, pts, 3)
         text(s, "step", (x0 + w, gy0 + gh + 8), 13, MUTED, anchor="topright")
         S = self.app.models.summary["world_model"]["seed0_prediction_error"]["model 0 (random data)"]
         mode = (f"MPC mode: re-sync to the real state every H = {self.H} steps" if self.resync
                 else "Open loop: the model only ever sees its own predictions")
-        text(s, mode, (x0 - 20, 545), 18, TEAL if self.resync else AMBER, True)
+        text(s, mode, (x0 - 20, 574), 18, TEAL if self.resync else AMBER, True)
         para(s, f"Measured on held-out data: {S['angle_err_deg'][0]:.2f}° after 1 step, "
                 f"{S['angle_err_deg'][14]:.2f}° after 15, {S['angle_err_deg'][29]:.1f}° after 30. "
                 "That is why MPC (and DreamerV3) imagine only ~15 steps and then start again from reality.",
-             x0 - 20, 575, 650, 16, MUTED)
+             x0 - 20, 602, 650, 16, MUTED)
 
 
 # ============================================================ 7. imagination
@@ -971,17 +1111,16 @@ class ImaginationSlide(Slide, SimMixin):
         def to_xy(row):
             xs = x0 + (x1 - x0) * np.arange(len(row)) / (len(row) - 1)
             ys = y1 - (y1 - y0) * (np.clip(row, lo, hi) - lo) / (hi - lo)
-            return np.stack([xs, ys], 1).tolist()
+            return np.stack([xs, ys], 1)
         yz = y1 - (y1 - y0) * (0 - lo) / (hi - lo)
-        pygame.draw.line(s, GRID, (x0, yz), (x1, yz))
-        ov = pygame.Surface((W, H), pygame.SRCALPHA)
-        for row in f:
-            pygame.draw.lines(ov, (*LAV, 60), False, to_xy(row), 1)
-        for row in dtheta(elites):
-            pygame.draw.lines(ov, (*AMBER, 170), False, to_xy(row), 2)
-        s.blit(ov, (0, 0))
+        draw.line(s, GRID, (x0, yz), (x1, yz))
+        with sublayer(s, (x0 - 4, y0 - 4, x1 - x0 + 8, y1 - y0 + 8)) as ov:
+            for row in f:
+                draw.lines(ov, (*LAV, 60), False, to_xy(row), 1)
+            for row in dtheta(elites):
+                draw.lines(ov, (*AMBER, 170), False, to_xy(row), 2)
         if plan is not None:
-            pygame.draw.lines(s, AMBER, False, to_xy(dtheta(plan[None])[0]), 4)
+            draw.lines(s, AMBER, False, to_xy(dtheta(plan[None])[0]), 4)
         text(s, "imagined angle change Δθ (°)", (x0, y0 - 28), 14, MUTED)
         text(s, f"{hi:+.0f}°", (x0 - 6, y0), 12, FAINT, anchor="topright")
         text(s, f"{lo:+.0f}°", (x0 - 6, y1), 12, FAINT, anchor="bottomright")
@@ -991,7 +1130,7 @@ class ImaginationSlide(Slide, SimMixin):
     def draw(self, s):
         cx, cy, R = 240, 400, 150
         rrect(s, CARD, (60, 150, 640, 500), 18)
-        pygame.draw.line(s, GRID, (395, 175), (395, 600))
+        draw.line(s, GRID, (395, 175), (395, 600))
         hist = self.cem.history
         if hist:
             slow_now = self.slow and self.pending is not None
@@ -1000,20 +1139,19 @@ class ImaginationSlide(Slide, SimMixin):
             # otherwise the first (widest) iteration so the search is visible
             fan = hist[it] if slow_now else hist[0]
             el_h = hist[it]
-            ov = pygame.Surface((W, H), pygame.SRCALPHA)
             el = set(el_h["elites"].tolist())
-            for i in range(fan["states"].shape[0]):
-                if slow_now and i in el:
-                    continue
-                pygame.draw.lines(ov, (*LAV, 70), False, tip_pts(fan["states"][i], (cx, cy), R), 1)
-            for i in el:
-                pygame.draw.lines(ov, (*AMBER, 170), False, tip_pts(el_h["states"][i], (cx, cy), R), 2)
-            s.blit(ov, (0, 0))
+            with sublayer(s, (cx - R - 6, cy - R - 6, 2 * R + 12, 2 * R + 12)) as ov:
+                for i in range(fan["states"].shape[0]):
+                    if slow_now and i in el:
+                        continue
+                    draw.lines(ov, (*LAV, 70), False, tip_pts(fan["states"][i], (cx, cy), R), 1)
+                for i in el:
+                    draw.lines(ov, (*AMBER, 170), False, tip_pts(el_h["states"][i], (cx, cy), R), 2)
             show_plan = not (slow_now and it < len(hist) - 1)
             if show_plan:
                 plan = self.cem.plan_states
                 pts = tip_pts(plan, (cx, cy), R)
-                pygame.draw.lines(s, AMBER, False, pts, 4)
+                draw.lines(s, AMBER, False, pts, 4)
                 draw_pendulum(s, (cx, cy), R, plan[-1], AMBER, 12, pivot=False, alpha=90)
             self.time_plot(s, fan["states"], el_h["states"][el_h["elites"]],
                            self.cem.plan_states if show_plan else None, self.HORIZONS[self.h_i], hist[0]["states"])
@@ -1054,7 +1192,7 @@ class ImaginationSlide(Slide, SimMixin):
                 bx = x0 + 34 + i * 108
                 on = i <= cur
                 hgt = max(3, 80 * c / mx_)
-                pygame.draw.rect(s, AMBER if on else GRID, (bx, 590 - hgt, 70, hgt), border_radius=6)
+                draw.rect(s, AMBER if on else GRID, (bx, 590 - hgt, 70, hgt), border_radius=6)
                 text(s, f"it {i + 1}", (bx + 35, 596), 14, MUTED, anchor="midtop")
                 text(s, f"{c:.2f}", (bx + 35, 584 - hgt), 14, TEXT if on else FAINT, anchor="midbottom")
             text(s, "imagined cost of the best plan after each iteration (lower is better)", (x0 + 24, 620), 13, FAINT)
@@ -1096,7 +1234,7 @@ class DaggerSlide(Slide):
                  ("database", "Aggregate + retrain", "dataset grows each round")]
         ang0 = -math.pi / 2
         pos = [(cx + r * math.cos(ang0 + i * 2 * math.pi / 3), cy + r * math.sin(ang0 + i * 2 * math.pi / 3)) for i in range(3)]
-        pygame.draw.circle(s, GRID, (cx, cy), r, 2)
+        draw.circle(s, GRID, (cx, cy), r, 2)
         f = (self.t * 0.35) % 1
         a = ang0 + f * 2 * math.pi
         circle(s, TEAL, (cx + r * math.cos(a), cy + r * math.sin(a)), 7)
@@ -1116,7 +1254,7 @@ class DaggerSlide(Slide):
         lo, hi = -1800, 0
         for v in range(lo, hi + 1, 300):
             yy = y0 + h - h * (v - lo) / (hi - lo)
-            pygame.draw.line(s, GRID, (x0 + 50, yy), (x0 + w - 10, yy))
+            draw.line(s, GRID, (x0 + 50, yy), (x0 + w - 10, yy))
             text(s, fmt_num(v), (x0 + 44, yy), 13, MUTED, anchor="midright")
         its = S["dagger"]["0"]["iteration"]
         xs = [x0 + 80 + (w - 130) * i / (len(its) - 1) for i in its]
@@ -1127,7 +1265,7 @@ class DaggerSlide(Slide):
         for v, col, lab in ((cem, AMBER, "CEM teacher"), (rnd, GRAY, "random")):
             yy = y0 + h - h * (v - lo) / (hi - lo)
             for xx in range(x0 + 50, x0 + w - 10, 14):
-                pygame.draw.line(s, col, (xx, yy), (xx + 7, yy), 2)
+                draw.line(s, col, (xx, yy), (xx + 7, yy), 2)
             text(s, lab, (x0 + 58, yy - 4), 13, col, anchor="bottomleft")
         prog = ease((self.t - getattr(self, "t_reveal", 0)) / 0.5)
         for (k, d), col in zip(S["dagger"].items(), [TEAL, SKY, LAV]):
@@ -1138,7 +1276,7 @@ class DaggerSlide(Slide):
                 last = (lerp(xs[n - 2], xs[n - 1], prog), lerp(ys[n - 2], ys[n - 1], prog))
                 pts = pts[:-1] + [last]
             if len(pts) > 1:
-                pygame.draw.lines(s, col, False, pts, 3)
+                draw.lines(s, col, False, pts, 3)
             for p in pts:
                 circle(s, col, p, 6)
             text(s, f"seed {k}", (x0 + 60 + int(k) * 90, 166), 15, col, True)
@@ -1206,8 +1344,8 @@ class RaceSlide(Slide):
             # decision time on a log scale from 1 µs to 100 ms
             ms = max(c.ms, 1e-3)
             f = (math.log10(ms) + 3) / 5
-            pygame.draw.rect(s, GRID, (x + 24, 556, 228, 10), border_radius=5)
-            pygame.draw.rect(s, col, (x + 24, 556, int(228 * max(0.02, min(1, f))), 10), border_radius=5)
+            draw.rect(s, GRID, (x + 24, 556, 228, 10), border_radius=5)
+            draw.rect(s, col, (x + 24, 556, int(228 * max(0.02, min(1, f))), 10), border_radius=5)
             text(s, f"{c.ms:.3f} ms / decision" if c.ms < 1 else f"{c.ms:.1f} ms / decision", (x + 138, 584), 16,
                  TEXT, True, anchor="center")
             text(s, "log scale, 1 µs → 100 ms", (x + 138, 606), 12, FAINT, anchor="center")
@@ -1248,13 +1386,13 @@ class ResultsSlide(Slide):
             bx = x0 + 50 + i * 125
             v, sd = C[n]["return_mean"], C[n]["return_std"]
             hgt = -v * scale * g
-            pygame.draw.rect(s, CTRL_COLORS[n], (bx, base, 70, hgt), border_bottom_left_radius=8, border_bottom_right_radius=8)
+            draw.rect(s, CTRL_COLORS[n], (bx, base, 70, hgt), border_bottom_left_radius=8, border_bottom_right_radius=8)
             near, far = base + max(0, -v - sd) * scale * g, base + (-v + sd) * scale * g
-            pygame.draw.line(s, TEXT, (bx + 35, near), (bx + 35, far), 2)
-            pygame.draw.line(s, TEXT, (bx + 27, far), (bx + 43, far), 2)
+            draw.line(s, TEXT, (bx + 35, near), (bx + 35, far), 2)
+            draw.line(s, TEXT, (bx + 27, far), (bx + 43, far), 2)
             text(s, fmt_num(v * g), (bx + 35, far + 6), 17, TEXT, True, anchor="midtop")
             text(s, short[n], (bx + 35, base - 8), 14, MUTED, anchor="midbottom")
-        pygame.draw.line(s, FAINT, (x0 + 30, base), (x0 + w - 30, base))
+        draw.line(s, FAINT, (x0 + 30, base), (x0 + w - 30, base))
         # decision time
         x0 = 660
         rrect(s, CARD, (x0, y0, w, h), 18)
@@ -1268,10 +1406,10 @@ class ResultsSlide(Slide):
             else:
                 f = v / 50
             hgt = max(2, 300 * f * g)
-            pygame.draw.rect(s, CTRL_COLORS[n], (bx, base - hgt, 70, hgt), border_top_left_radius=8, border_top_right_radius=8)
+            draw.rect(s, CTRL_COLORS[n], (bx, base - hgt, 70, hgt), border_top_left_radius=8, border_top_right_radius=8)
             text(s, f"{v * g:.3f}" if v < 1 else f"{v * g:.1f}", (bx + 35, base - hgt - 6), 17, TEXT, True, anchor="midbottom")
             text(s, short[n], (bx + 35, base + 10), 14, MUTED, anchor="midtop")
-        pygame.draw.line(s, FAINT, (x0 + 30, base), (x0 + w - 30, base))
+        draw.line(s, FAINT, (x0 + 30, base), (x0 + w - 30, base))
         hd = S["headline"]
         text(s, f"{hd['speedup_policy_vs_cem'] * g:.0f}× faster than CEM", (60, 600), 30, TEAL, True)
         text(s, f"{100 * hd['policy_normalized_score'] * g:.0f}% of CEM's improvement over random kept", (500, 606), 22, TEXT, True)
@@ -1328,25 +1466,32 @@ class ClaimsSlide(Slide):
             self.flip[i] += (self.target[i] - self.flip[i]) * min(1, dt * 8)
 
     def draw(self, s):
-        for i, ((ic, col, who, claim, obs, ok), (x, y, w, h)) in enumerate(zip(self.cards, self.rects())):
+        for i, (x, y, w, h) in enumerate(self.rects()):
             f = self.flip[i]
             back = f > 0.5
             sx = abs(math.cos(f * math.pi))           # card "turns" around its vertical axis
-            card = pygame.Surface((w, h), pygame.SRCALPHA)
-            rrect(card, CARD2 if back else CARD, (0, 0, w, h), 18)
-            icon(card, ic, (50, 55), 60, col)
-            text(card, who, (24, 100), 24, TEXT, True)
-            if not back:
-                text(card, "CLAIM", (24, 150), 15, MUTED, True)
-                para(card, claim, 24, 178, w - 48, 22, TEXT)
-                text(card, f"press {i + 1} to see the result", (24, h - 40), 14, FAINT)
-            else:
-                text(card, "WHAT I OBSERVED", (24, 150), 15, col, True)
-                para(card, obs, 24, 178, w - 48, 22, TEXT)
-                icon(card, "check" if ok else "warn", (w - 46, h - 46), 48, TEAL if ok else CORAL)
-            cw = max(1, int(w * sx))
-            card = pygame.transform.smoothscale(card, (cw, h))
-            s.blit(card, (x + (w - cw) // 2, y))
+            card = pygame.Surface((PX(w), PX(h)), pygame.SRCALPHA)
+            with local_origin():
+                self.draw_card(card, i, w, h, back)
+            cw = max(1, int(PX(w) * sx))
+            card = pygame.transform.smoothscale(card, (cw, PX(h)))
+            x0, y0 = P((x + (w - w * sx) / 2, y))
+            s.blit(card, (int(round(x0)), int(round(y0))))
+
+    def draw_card(self, card, i, w, h, back):
+        """One flip card, drawn in its own (0, 0)-based design space."""
+        ic, col, who, claim, obs, ok = self.cards[i]
+        rrect(card, CARD2 if back else CARD, (0, 0, w, h), 18)
+        icon(card, ic, (50, 55), 60, col)
+        text(card, who, (24, 100), 24, TEXT, True)
+        if not back:
+            text(card, "CLAIM", (24, 150), 15, MUTED, True)
+            para(card, claim, 24, 178, w - 48, 22, TEXT)
+            text(card, f"press {i + 1} to see the result", (24, h - 40), 14, FAINT)
+        else:
+            text(card, "WHAT I OBSERVED", (24, 150), 15, col, True)
+            para(card, obs, 24, 178, w - 48, 22, TEXT)
+            icon(card, "check" if ok else "warn", (w - 46, h - 46), 48, TEAL if ok else CORAL)
 
 
 # ============================================================ 12. takeaway
@@ -1393,22 +1538,34 @@ class TakeawaySlide(Slide, SimMixin):
 
 
 # ================================================================ the app
+def make_dpi_aware():
+    """Stop Windows from bitmap-stretching the window when display scaling is
+    125 % / 150 % (that stretching is what makes text look blurry)."""
+    if sys.platform != "win32":
+        return
+    os.environ.setdefault("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
+    try:
+        import ctypes
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)      # per-monitor aware
+        except Exception:
+            ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
 class App:
     SLIDES = [TitleSlide, ReadingsSlide, TryItSlide, ModesSlide, PipelineSlide, CompoundingSlide,
               ImaginationSlide, DaggerSlide, RaceSlide, ResultsSlide, ClaimsSlide, TakeawaySlide]
 
-    def __init__(self, fullscreen=False, start=0):
+    def __init__(self, fullscreen=False, start=0, size=None):
         global FONTS
+        make_dpi_aware()
         pygame.display.init()             # no audio needed
         pygame.font.init()
         pygame.display.set_caption("ENG 6010 · Readings 6 · From Mode-2 to Mode-1")
-        flags = pygame.SCALED | pygame.RESIZABLE
-        if fullscreen:
-            flags |= pygame.FULLSCREEN
-        try:
-            self.screen = pygame.display.set_mode((W, H), flags, vsync=1)
-        except pygame.error:                      # no vsync on this machine
-            self.screen = pygame.display.set_mode((W, H), flags)
+        self.fixed_size = size            # only used for --screenshots
+        self.open_window(fullscreen)
         FONTS = Fonts()
         self.models = Models()
         self.slides = [S(self) for S in self.SLIDES]
@@ -1416,6 +1573,27 @@ class App:
         self.slides[self.i].enter()
         self.fade = 1.0
         self.clock = pygame.time.Clock()
+
+    def open_window(self, fullscreen):
+        """Open a window at the screen's real resolution (no stretched image).
+
+        Windowed: the largest 16:9 window that fits ~90% of the desktop.
+        Fullscreen: the monitor's native resolution.
+        """
+        self.fullscreen = fullscreen
+        if self.fixed_size:
+            size, flags = self.fixed_size, 0
+        elif fullscreen:
+            size, flags = (0, 0), pygame.FULLSCREEN
+        else:
+            try:
+                dw, dh = pygame.display.get_desktop_sizes()[0]
+            except Exception:
+                dw, dh = W, H
+            k = min(dw * 0.9 / W, dh * 0.85 / H)
+            size, flags = (int(W * k), int(H * k)), pygame.RESIZABLE
+        self.screen = pygame.display.set_mode(size, flags)
+        View.fit(*self.screen.get_size())
 
     def go(self, d):
         j = max(0, min(len(self.slides) - 1, self.i + d))
@@ -1428,6 +1606,7 @@ class App:
         sl = self.slides[self.i]
         sl.update(dt)
         s = self.screen
+        View.fit(*s.get_size())
         s.fill(BG_DEEP if self.i in (0, len(self.slides) - 1) else BG)
         if sl.title:
             text(s, sl.kicker.upper(), (60, 46), 15, sl.kicker_color, True)
@@ -1441,7 +1620,7 @@ class App:
             circle(s, col, (W - 60 - (len(self.slides) - 1 - k) * 14, 695), 4)
         if self.fade < 1.0:
             self.fade = min(1.0, self.fade + dt * 4)
-            veil = pygame.Surface((W, H))
+            veil = pygame.Surface(s.get_size())
             veil.fill(BG)
             veil.set_alpha(int(255 * (1 - ease(self.fade))))
             s.blit(veil, (0, 0))
@@ -1452,11 +1631,13 @@ class App:
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
                     return
+                if e.type == pygame.VIDEORESIZE and not self.fullscreen:
+                    self.screen = pygame.display.get_surface()
                 if e.type == pygame.KEYDOWN:
                     if e.key == pygame.K_ESCAPE:
                         return
                     if e.key == pygame.K_f:
-                        pygame.display.toggle_fullscreen()
+                        self.open_window(not self.fullscreen)
                     elif self.slides[self.i].key(e.key):
                         pass
                     elif e.key in (pygame.K_RIGHT, pygame.K_SPACE, pygame.K_PAGEDOWN, pygame.K_RETURN):
@@ -1464,7 +1645,7 @@ class App:
                     elif e.key in (pygame.K_LEFT, pygame.K_PAGEUP, pygame.K_BACKSPACE):
                         self.go(-1)
                 if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-                    self.slides[self.i].click(e.pos, e.button)
+                    self.slides[self.i].click(to_design(e.pos), e.button)
             self.frame(dt)
             pygame.display.flip()
 
@@ -1489,12 +1670,14 @@ def main():
     ap.add_argument("--fullscreen", action="store_true")
     ap.add_argument("--start", type=int, default=1, help="slide number to start on")
     ap.add_argument("--screenshots", metavar="DIR", help="save a PNG of every slide and exit (no window needed)")
+    ap.add_argument("--size", default="1280x720", help="image size for --screenshots, e.g. 1920x1080")
     args = ap.parse_args()
     if not os.path.exists(os.path.join(RESULTS, "models", "policy_seed0.pt")):
         sys.exit("results/models/*.pt not found - run `python main.py` first.")
     if args.screenshots:
         os.environ["SDL_VIDEODRIVER"] = "dummy"
-    app = App(args.fullscreen, args.start - 1)
+    size = tuple(int(v) for v in args.size.lower().split("x")) if args.screenshots else None
+    app = App(args.fullscreen, args.start - 1, size)
     if args.screenshots:
         app.screenshots(args.screenshots)
     else:
