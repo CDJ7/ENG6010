@@ -1,0 +1,72 @@
+﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <!--
+    Visual Studio Python project for Readings 6.
+    Start file: presentation\interactive_presentation.py (the live presentation).
+    Press Ctrl+F5 (Start Without Debugging) to present; F5 works too but the debugger slows the planner slides.
+    To run something else, right-click a .py file in Solution Explorer and choose "Set as Startup File".
+    Script arguments (e.g. fullscreen dash-dash-fullscreen, or dash-dash-start 7) go in Project Properties, Debug, Script Arguments.
+  -->
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{2519D876-93F2-41F8-96E7-3F4644398952}</ProjectGuid>
+    <ProjectHome>.</ProjectHome>
+    <StartupFile>presentation\interactive_presentation.py</StartupFile>
+    <SearchPath>.</SearchPath>
+    <WorkingDirectory>.</WorkingDirectory>
+    <OutputPath>.</OutputPath>
+    <Name>Readings_6</Name>
+    <RootNamespace>Readings_6</RootNamespace>
+    <InterpreterId>MSBuild|.venv|$(MSBuildProjectFullPath)</InterpreterId>
+    <CommandLineArguments></CommandLineArguments>
+    <IsWindowsApplication>False</IsWindowsApplication>
+    <LaunchProvider>Standard Python launcher</LaunchProvider>
+    <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="presentation\interactive_presentation.py" />
+    <Compile Include="presentation\make_presentation.py" />
+    <Compile Include="main.py" />
+    <Compile Include="config.py" />
+    <Compile Include="collect_data.py" />
+    <Compile Include="world_model.py" />
+    <Compile Include="cost.py" />
+    <Compile Include="planner.py" />
+    <Compile Include="policy.py" />
+    <Compile Include="evaluate.py" />
+    <Compile Include="plots.py" />
+    <Compile Include="utils.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="presentation\" />
+    <Folder Include="results\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="README.md" />
+    <Content Include="Program_Explanation.md" />
+    <Content Include="Results.md" />
+    <Content Include="requirements.txt" />
+    <Content Include="run_presentation.bat" />
+    <Content Include="results\summary.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <Interpreter Include=".venv\">
+      <Id>.venv</Id>
+      <Version>3.13</Version>
+      <Description>.venv (Readings 6 virtual environment)</Description>
+      <InterpreterPath>Scripts\python.exe</InterpreterPath>
+      <WindowsInterpreterPath>Scripts\pythonw.exe</WindowsInterpreterPath>
+      <PathEnvironmentVariable>PYTHONPATH</PathEnvironmentVariable>
+      <Architecture>X64</Architecture>
+    </Interpreter>
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
+</Project>

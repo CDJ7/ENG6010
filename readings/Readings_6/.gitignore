@@ -3,3 +3,5 @@ data/
 results_quick/
 data_quick/
 presentation/frames/
+.vs/
+*.user

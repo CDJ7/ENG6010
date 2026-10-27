@@ -40,6 +40,8 @@ Readings_6/
 │   ├── screenshots/              previews of the interactive slides
 │   └── icons/                    slide icons (PNG)
 ├── requirements.txt        pinned package versions
+├── Readings_6.sln / .pyproj  Visual Studio solution: open it and press Ctrl+F5 to run the presentation
+├── run_presentation.bat    Windows one-click: sets up .venv the first time, then starts the presentation
 ├── config.py               every hyperparameter in one place (like DreamerV3's configs.yaml)
 ├── utils.py                symlog/symexp, seeding, decision-time stopwatch, env factory
 ├── cost.py                 fixed Pendulum cost = LeCun's "intrinsic cost"
@@ -120,14 +122,18 @@ Navigation: **→ / Space** next, **←** back, **F** fullscreen, **Esc** quit. 
 
 `python presentation/interactive_presentation.py --screenshots DIR` renders every slide to PNG without opening a window.
 
-### Running it from VS Code (Windows)
+### Running it from Visual Studio (Windows)
 
-1. **File → Open Folder…** and pick `readings/Readings_6` itself (not the repo root), so VS Code reads `.vscode/`.
-2. First time only: double-click `run_presentation.bat` (or run it in the VS Code terminal). It creates `.venv`, installs the packages and starts the talk. Press Esc to close it.
-3. **Ctrl+Shift+P → Python: Select Interpreter** → choose `.venv` (the settings file already points there).
-4. Open **Run and Debug** (Ctrl+Shift+D), pick **Presentation (fullscreen)** or **Presentation (window, for rehearsing)**, and press **Ctrl+F5** (Run Without Debugging; F5 also works but the debugger slows the planner slides).
+The folder includes `Readings_6.sln` and `Readings_6.pyproj`, whose start file is the interactive presentation.
 
-The same menu also has *start on a chosen slide*, `main.py`, `main.py --quick` and *rebuild the .pptx backup*.
+1. In the Visual Studio Installer, make sure the **Python development** workload is installed.
+2. First time only: double-click `run_presentation.bat`. It creates `.venv`, installs the packages and opens the talk once (Esc to close).
+3. Open `Readings_6.sln` in Visual Studio. In Solution Explorer, **Python Environments** should show `.venv` as the active environment.
+4. Press **Ctrl+F5** (Start Without Debugging). F5 also works, but the debugger slows the planner slides.
+
+To start fullscreen or on a given slide, put `--fullscreen` or `--start 7` in **Project → Properties → Debug → Script Arguments** (or press F in the running app). To run another script, right-click it in Solution Explorer → **Set as Startup File**.
+
+VS Code users: open the `Readings_6` folder and use the entries in **Run and Debug** (from `.vscode/launch.json`).
 
 All randomness (NumPy, PyTorch, environment start states, planner sampling) is seeded, so re-running gives the same returns. Decision times naturally depend on the CPU. PyTorch runs on a single thread (`config.torch_threads = 1`) so the timing comparison is fair and repeatable.
 
