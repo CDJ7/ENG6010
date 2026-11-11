@@ -1,0 +1,6 @@
+# Reading 7 needs only two packages (no PyTorch).
+# Windows wheels exist for Python 3.12, 3.13, 3.14 and 3.15.
+numpy==2.5.3
+# pygame-ce = community edition of pygame (same `import pygame`), with
+# ready-made wheels for new Python versions.
+pygame-ce==2.5.8

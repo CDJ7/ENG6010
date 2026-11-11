@@ -1,0 +1,72 @@
+﻿<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <!--
+    Visual Studio Python project for Reading 7.
+    Start file: presentation\interactive_presentation.py (the interactive slideshow).
+    Press Ctrl+F5 (Start Without Debugging) to present.
+    To run something else (e.g. evaluate.py), right-click it in Solution Explorer and choose "Set as Startup File".
+    Script arguments (e.g. dash-dash-fullscreen) go in Project Properties, Debug, Script Arguments.
+  -->
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{E25CECA3-CA40-40CB-AE63-81161E9F10A0}</ProjectGuid>
+    <ProjectHome>.</ProjectHome>
+    <StartupFile>presentation\interactive_presentation.py</StartupFile>
+    <SearchPath>.;presentation</SearchPath>
+    <WorkingDirectory>.</WorkingDirectory>
+    <OutputPath>.</OutputPath>
+    <Name>Reading_7</Name>
+    <RootNamespace>Reading_7</RootNamespace>
+    <InterpreterId>MSBuild|.venv|$(MSBuildProjectFullPath)</InterpreterId>
+    <CommandLineArguments></CommandLineArguments>
+    <IsWindowsApplication>False</IsWindowsApplication>
+    <LaunchProvider>Standard Python launcher</LaunchProvider>
+    <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="presentation\interactive_presentation.py" />
+    <Compile Include="presentation\engine.py" />
+    <Compile Include="presentation\slides_intro_gorilla.py" />
+    <Compile Include="presentation\slides_voxposer.py" />
+    <Compile Include="presentation\slides_l2r.py" />
+    <Compile Include="presentation\slides_kine2go_end.py" />
+    <Compile Include="evaluate.py" />
+    <Compile Include="demos\__init__.py" />
+    <Compile Include="demos\gorilla_demo.py" />
+    <Compile Include="demos\voxposer_demo.py" />
+    <Compile Include="demos\l2r_demo.py" />
+    <Compile Include="demos\kine2go_demo.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="demos\" />
+    <Folder Include="presentation\" />
+    <Folder Include="results\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="README.md" />
+    <Content Include="Article_Summaries.md" />
+    <Content Include="requirements.txt" />
+    <Content Include="run_presentation.bat" />
+    <Content Include="results\summary.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <Interpreter Include=".venv\">
+      <Id>.venv</Id>
+      <Version>3.13</Version>
+      <Description>.venv (Reading 7 virtual environment)</Description>
+      <InterpreterPath>Scripts\python.exe</InterpreterPath>
+      <WindowsInterpreterPath>Scripts\pythonw.exe</WindowsInterpreterPath>
+      <PathEnvironmentVariable>PYTHONPATH</PathEnvironmentVariable>
+      <Architecture>X64</Architecture>
+    </Interpreter>
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
+</Project>

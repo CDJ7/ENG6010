@@ -1,0 +1,213 @@
+{
+  "gorilla": {
+    "api_db_size": 15,
+    "bm25_top1_accuracy": 0.8333333333333334,
+    "queries": [
+      {
+        "prompt": "Help me find an API to convert the spoken language in a recorded audio to text using Torch Hub.",
+        "bm25_top1": "silero_stt",
+        "bm25_correct": true,
+        "verdicts": {
+          "Answer A (invents a model)": "hallucination",
+          "Answer B (wrong library)": "hallucination",
+          "Answer C (correct)": "correct"
+        }
+      },
+      {
+        "prompt": "I want to automatically remove the background from an input image.",
+        "bm25_top1": "fcn_resnet50",
+        "bm25_correct": true,
+        "verdicts": {
+          "Answer A (correct)": "correct",
+          "Answer B (real API, wrong task)": "error",
+          "Answer C (made-up repo)": "hallucination"
+        }
+      },
+      {
+        "prompt": "I am an engineer at Uber and I need to classify pedestrians, cars, etc. from an image of the scene.",
+        "bm25_top1": "hybridnets",
+        "bm25_correct": true,
+        "verdicts": {
+          "Answer A (correct)": "correct",
+          "Answer B (real API, wrong task)": "error",
+          "Answer C (made-up model name)": "hallucination"
+        }
+      },
+      {
+        "prompt": "Invoke an image classification model that uses less than 10M parameters, but maintains an ImageNet accuracy of at least 70%.",
+        "bm25_top1": "densenet121",
+        "bm25_correct": false,
+        "verdicts": {
+          "Answer A (meets both constraints)": "correct",
+          "Answer B (too big: 25.6M params)": "error",
+          "Answer C (made-up model)": "hallucination"
+        }
+      },
+      {
+        "prompt": "I would like to generate an image of cats dancing from a text description.",
+        "bm25_top1": "sd21",
+        "bm25_correct": true,
+        "verdicts": {
+          "Answer A (correct)": "correct",
+          "Answer B (placeholder path)": "hallucination",
+          "Answer C (real API, wrong task)": "error"
+        }
+      },
+      {
+        "prompt": "Read this paragraph out loud with a natural voice.",
+        "bm25_top1": "tacotron2",
+        "bm25_correct": true,
+        "verdicts": {
+          "Answer A (correct)": "correct",
+          "Answer B (real API, wrong task)": "error",
+          "Answer C (made-up repo)": "hallucination"
+        }
+      }
+    ],
+    "doc_update": {
+      "retriever_aware_output": "torch.hub.load('pytorch/vision', 'fcn_resnet101', pretrained=True)",
+      "retriever_aware_verdict": "correct",
+      "frozen_output": "torch.hub.load('pytorch/vision', 'fcn_resnet50', pretrained=True)",
+      "frozen_verdict": "hallucination"
+    }
+  },
+  "voxposer": {
+    "aff_only": {
+      "reached": 0.43,
+      "collided": 0.57
+    },
+    "aff_avoid": {
+      "reached": 0.9266666666666666,
+      "collided": 0.07333333333333333
+    },
+    "open_loop_dist": {
+      "reached": 0.056666666666666664,
+      "collided": 0.07333333333333333
+    },
+    "mpc_dist": {
+      "reached": 0.88,
+      "collided": 0.12
+    },
+    "n_scenes": 300
+  },
+  "l2r": {
+    "tasks": [
+      {
+        "instruction": "Swing the pole up and balance it.",
+        "reward": 1.0,
+        "cap": 1.0
+      },
+      {
+        "instruction": "Lean the pole 20 degrees to the right and hold it there.",
+        "reward": 1.0,
+        "cap": 0.0
+      },
+      {
+        "instruction": "Spin it clockwise, fast.",
+        "reward": 1.0,
+        "cap": 0.0
+      },
+      {
+        "instruction": "Let it hang down and stay still.",
+        "reward": 1.0,
+        "cap": 1.0
+      },
+      {
+        "instruction": "Hold the pole horizontal, pointing right.",
+        "reward": 0.0,
+        "cap": 0.0,
+        "achieved_lean_deg": 156.5181078787383
+      }
+    ],
+    "horizon_sweep": {
+      "10": 1.0,
+      "20": 1.0,
+      "30": 1.0,
+      "40": 0.7,
+      "60": 0.0
+    }
+  },
+  "kine2go": {
+    "retargeting": {
+      "dog/walk": {
+        "scale": 0.852,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 0.8
+      },
+      "dog/trot": {
+        "scale": 0.852,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 0.583
+      },
+      "dog/pace": {
+        "scale": 0.852,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 0.583
+      },
+      "dog/canter": {
+        "scale": 0.852,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 0.517
+      },
+      "horse/walk": {
+        "scale": 0.294,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 1.0
+      },
+      "horse/trot": {
+        "scale": 0.294,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 1.0
+      },
+      "horse/pace": {
+        "scale": 0.294,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 1.0
+      },
+      "horse/canter": {
+        "scale": 0.294,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 1.0
+      },
+      "solo8/walk": {
+        "scale": 1.331,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 0.0
+      },
+      "solo8/trot": {
+        "scale": 1.331,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 0.0
+      },
+      "solo8/pace": {
+        "scale": 1.331,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 0.0
+      },
+      "solo8/canter": {
+        "scale": 1.331,
+        "clipped_fraction": 0.0,
+        "naive_clipped_fraction": 0.0
+      }
+    },
+    "tracker_reward_vs_noise_deg": {
+      "0": 1.0,
+      "2": 0.9366832453816814,
+      "5": 0.8370092608802684,
+      "10": 0.6255392481694347,
+      "20": 0.4304748999837617
+    },
+    "dataset": {
+      "policies": 40,
+      "rollouts_per_policy": 20,
+      "trajectories": 800,
+      "sources": {
+        "AI4Animation dog mocap": 15,
+        "AI4Animation interactive wolf": 7,
+        "VHDC horses": 12,
+        "Solo8 robot": 6
+      }
+    }
+  },
+  "runtime_seconds": 97.9
+}
