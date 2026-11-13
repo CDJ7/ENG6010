@@ -93,6 +93,51 @@ class RewardSpec:
         return -sum(self.terms[k].weight * r[k] ** 2 for k in r)
 
 
+def reward_landscape(spec, n_theta=90, n_speed=60):
+    """The reward of every (angle, speed) state with zero torque: the 'shape'
+    the optimiser climbs. Angle in [-180, 180) deg, speed in [-8, 8] rad/s."""
+    th = np.linspace(-np.pi, np.pi, n_theta, endpoint=False)
+    w = np.linspace(-MAX_SPEED, MAX_SPEED, n_speed)
+    T, Wd = np.meshgrid(th, w)
+    return spec.reward(T, Wd, np.zeros_like(T)), th, w
+
+
+# The Motion Descriptor template, in the paper's style ([NUM: default] and
+# {CHOICE: ...} slots that the LLM must fill in), adapted to the pendulum.
+TEMPLATE = ["[start of description]",
+            "The pole should point at [NUM: 0.0] degrees (0 = up, positive = right).",
+            "The pole should {CHOICE: hold still, spin}.",
+            "If spinning, it should spin at [NUM: 0.0] degrees/s (positive = clockwise).",
+            "[optional] Use as little motor effort as possible.",
+            "[end of description]"]
+
+# Plain-language corrections (paper Sec. 4.5): each one edits the reward.
+CORRECTIONS = [
+    ("A bit further to the right.", "angle", "target", +10),
+    ("Hold it more steadily.", "speed", "weight", +0.3),
+    ("Use less energy.", "effort", "weight", +0.05),
+    ("Spin faster.", "speed", "target", +120),
+    ("Actually, lean the other way.", "angle", "flip", 0),
+]
+
+
+def apply_correction(spec, corr):
+    """Apply one correction to the reward; return the changed line of code."""
+    _, term, field, delta = corr
+    t = spec.terms[term]
+    if field == "flip":
+        t.target = -t.target
+    elif field == "target":
+        t.target += delta
+    else:
+        t.weight = round(t.weight + delta, 3)
+    if term == "angle":
+        return f"set_angle_reward({t.target:g}, weight={t.weight:g})"
+    if term == "speed":
+        return f"set_speed_reward({t.target:g}, weight={t.weight:g})"
+    return f"set_effort_reward(weight={t.weight:g})"
+
+
 def run_reward_code(lines):
     """Execute Reward Coder output against the reward API (like the paper does)."""
     spec = RewardSpec()
@@ -113,10 +158,12 @@ class PredictiveSampling:
     with the reward, keep the best (the nominal is a candidate too, so the plan
     never gets worse), execute its first action and shift it by one step."""
 
-    def __init__(self, spec, horizon=30, samples=256, noise=1.0, seed=0):
+    def __init__(self, spec, horizon=30, samples=256, noise=1.0, seed=0, record=False):
         self.spec, self.H, self.N, self.noise = spec, horizon, samples, noise
         self.rng = np.random.default_rng(seed)
         self.plan = np.zeros(horizon)
+        self.record = record            # keep every sampled rollout (for drawing)
+        self.rollouts = None
 
     def act(self, th, thdot):
         knots = 6
@@ -128,10 +175,17 @@ class PredictiveSampling:
         cand = np.clip(np.vstack([self.plan, self.plan + smooth]), -MAX_TORQUE, MAX_TORQUE)
         a, b = np.full(self.N, th), np.full(self.N, thdot)
         total = np.zeros(self.N)
+        traj = [(a, b)] if self.record else None
         for k in range(self.H):
             total += self.spec.reward(a, b, cand[:, k])
             a, b = step(a, b, cand[:, k])
-        best = cand[int(np.argmax(total))]
+            if self.record:
+                traj.append((a, b))
+        i_best = int(np.argmax(total))
+        if self.record:
+            self.rollouts = dict(theta=np.stack([t[0] for t in traj], 1), thdot=np.stack([t[1] for t in traj], 1),
+                                 score=total, best=i_best)
+        best = cand[i_best]
         self.plan = np.append(best[1:], best[-1])
         return float(best[0])
 

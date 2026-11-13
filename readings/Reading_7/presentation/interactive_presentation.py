@@ -9,10 +9,10 @@ Keys: Right / Space / PageDown next · Left / PageUp back · F fullscreen · Esc
 Each slide lists its own interactive keys in the bar at the bottom.
 
 The demos on the slides run the code in demos/ live:
-    Article 1  Gorilla              BM25 retrieval, AST hallucination check, docs update
-    Article 2  VoxPoser             value maps + greedy planner + MPC replanning (drag objects)
-    Article 3  Language to Rewards  reward API + predictive-sampling MPC (edit the reward live)
-    Article 4  Kine2Go              retargeting with IK, the imitation reward, rollout coverage
+    Article 1  Gorilla              BM25 word heatmap, API builder + AST trees, docs update
+    Article 2  VoxPoser             3D value surface, planner lab (greedy vs A*, weights, the trap)
+    Article 3  Language to Rewards  template filling, reward landscape + 256 sampled futures, corrections
+    Article 4  Kine2Go              data factory, IK playground, reward kernels, rollout coverage
 Numbers about my demos come from results/summary.json (python evaluate.py);
 numbers from the papers are labelled as such on the slides.
 """
@@ -27,19 +27,20 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, ROOT)
 
 from engine import run_cli  # noqa: E402
-from slides_intro_gorilla import (GorillaDemoSlide, GorillaIdeaSlide, GorillaResultsSlide,  # noqa: E402
-                                  StackSlide, TitleSlide)
-from slides_kine2go_end import (KineDatasetSlide, KineIdeaSlide, KineRetargetSlide,  # noqa: E402
-                                KineRewardSlide, TakeawaySlide, ThreadsSlide)
-from slides_l2r import L2RDemoSlide, L2RIdeaSlide, L2RResultsSlide  # noqa: E402
-from slides_voxposer import VoxDemoSlide, VoxIdeaSlide, VoxResultsSlide  # noqa: E402
+from slides_closing import ConnectionsSlide, QuizSlide, TakeawaySlide  # noqa: E402
+from slides_gorilla import (GorillaASTSlide, GorillaIdeaSlide, GorillaResultsSlide,  # noqa: E402
+                            GorillaRetrieverSlide)
+from slides_kine2go import KineDatasetSlide, KineIdeaSlide, KineIKSlide, KineRewardSlide  # noqa: E402
+from slides_l2r import L2RIdeaSlide, L2RLabSlide, L2RResultsSlide  # noqa: E402
+from slides_overview import SubwaySlide, TitleSlide  # noqa: E402
+from slides_voxposer import VoxIdeaSlide, VoxLabSlide, VoxResultsSlide  # noqa: E402
 
-SLIDES = [TitleSlide, StackSlide,
-          GorillaIdeaSlide, GorillaDemoSlide, GorillaResultsSlide,
-          VoxIdeaSlide, VoxDemoSlide, VoxResultsSlide,
-          L2RIdeaSlide, L2RDemoSlide, L2RResultsSlide,
-          KineIdeaSlide, KineRetargetSlide, KineRewardSlide, KineDatasetSlide,
-          ThreadsSlide, TakeawaySlide]
+SLIDES = [TitleSlide, SubwaySlide,
+          GorillaIdeaSlide, GorillaRetrieverSlide, GorillaASTSlide, GorillaResultsSlide,
+          VoxIdeaSlide, VoxLabSlide, VoxResultsSlide,
+          L2RIdeaSlide, L2RLabSlide, L2RResultsSlide,
+          KineIdeaSlide, KineIKSlide, KineRewardSlide, KineDatasetSlide,
+          ConnectionsSlide, QuizSlide, TakeawaySlide]
 
 
 def main():

@@ -160,6 +160,16 @@ def imitation_reward(sim, ref):
     return total, r
 
 
+# The k in exp(-k * error^2) for every tracking term (paper Eqs. 3-8)
+KERNELS = dict(q=5.0, qdot=0.1, ee=40.0, pos=20.0, rot=10.0, vel=2.0, angvel=0.2)
+
+
+def workspace(l1, l2):
+    """Inner and outer radius of the foot's reachable ring around the hip
+    (same limits that ik_2link uses)."""
+    return abs(l1 - l2) + 0.05, 0.98 * (l1 + l2)
+
+
 MAX_REWARD = WEIGHTS["q"] + WEIGHTS["qdot"] + WEIGHTS["ee"] + 2 * WEIGHTS["pose"] + 2 * WEIGHTS["vel"]
 
 # Episode termination (paper Table 3)

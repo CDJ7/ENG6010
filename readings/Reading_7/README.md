@@ -34,25 +34,27 @@ python presentation/interactive_presentation.py --fullscreen
 
 Each slide lists its own keys along the bottom of the screen. It renders at your screen's native resolution, so it stays sharp at any size.
 
-| # | Slide | What you can do |
+| # | Slide | What it looks like · what you can do |
 |---|---|---|
-| 1 | From Words to Motors | Click a layer of the language-to-motors stack |
-| 2 | The key link | 1-4 / click: see each paper's bridge from words to motors |
-| 3 | Gorilla: the idea | The paper's Figure 1 example (hallucination vs wrong library vs correct) |
-| 4 | **Gorilla live demo** | Q: next prompt · **T: type your own prompt** · C: check a candidate answer with the AST matcher · U: update the documentation and compare a retriever-aware model with a memorising one |
-| 5 | Gorilla results | R: switch retriever (zero-shot / BM25 / GPT-Index / Oracle) · H: accuracy ↔ hallucination (paper Table 1) |
-| 6 | VoxPoser: the idea | Watch the LLM program being written, then follow the pipeline |
-| 7 | **VoxPoser live demo** | **Drag the vase, mug, bowl, handle or gripper while it moves**: value maps and plan update every step (MPC) · 1-3: instruction · M: cost / affordance / avoidance view |
-| 8 | VoxPoser results | Paper's real-robot table + my 300-scene demo results |
-| 9 | Language to Rewards: the idea | The pipeline + the paper's moonwalk conversation, played out step by step |
-| 10 | **Language to Rewards live demo** | 1-5: instruction · Tab / W / S / A / D: **edit reward weights and targets live** · P: switch to the fixed-primitives baseline · K: kick |
-| 11 | Language to Rewards results | Paper (90% vs 50%) + my pendulum results + horizon sweep |
-| 12 | Kine2Go: the idea | The 3-stage pipeline and the 40 source motions |
-| 13 | **Kine2Go retargeting demo** | 1-4: walk / trot / pace / canter · S: dog / horse / Solo8 · **N: naive copy, showing why scaling matters** |
-| 14 | **Kine2Go imitation reward demo** | ↑/↓: tracking error · K: shove the robot (falls get filtered out) |
-| 15 | Kine2Go dataset | M: motion; 20 random-heading rollouts, like the paper's Figure 4b |
-| 16 | Five common threads | Click / 1-5 to flip the cards |
-| 17 | Takeaway | |
+| 1 | From Words to Motors | Letters of an instruction fall through four layers and turn into a motor waveform · click a layer |
+| 2 | The key link | A subway line with five stations (language → API call → value map → reward → motor data) · click a station / 1-5 to see what travels there |
+| 3 | Gorilla: the idea | A chat app replays the paper's Figure 1 (GPT-4 / Claude / Gorilla) with verdict stamps; machines on a belt build Gorilla (1,645 docs → 16,450 pairs → LLaMA-7B) |
+| 4 | **Gorilla: the retriever** | **BM25 heatmap**: every query word × every API doc · Q: next prompt · **T: type your own** · click a row |
+| 5 | **Gorilla: AST lab** | **Build a call** from three slots (1/2/3), see **your call's tree vs the reference tree**, verdict stamp + tally · Q: task · U: update the docs |
+| 6 | Gorilla results | Accuracy-vs-hallucination **scatter** (paper Table 1); dots glide when you switch retriever (R) or hub (H) |
+| 7 | VoxPoser: the idea | Code lines light up and reshape a **rotatable 3D value surface** (drag / A, D) · R: replay |
+| 8 | **VoxPoser planner lab** | **Greedy vs A\*** (G), **weight sliders**, drag objects, **4: the cup-shaped trap** that catches greedy descent · M: map view |
+| 9 | VoxPoser results | Paper's real-robot trials as a dot matrix + a **waffle of my 300 scenes** per condition (1-4) |
+| 10 | Language to Rewards: the idea | The **Motion Descriptor template fills its slots**, the Reward Coder types code, a pendulum starts moving · 1-5: instruction |
+| 11 | **Language to Rewards: reward lab** | **Phase-plane reward landscape + the optimiser's 256 sampled futures** · 1-5: **say a correction** (code diff shown) · click the plane to drop the pole · P: primitives |
+| 12 | Language to Rewards results | Rings (paper 90% vs 50%), my task matrix, horizon curve, the impossible request, moonwalk chat (N) |
+| 13 | Kine2Go: the idea | A **factory belt**: 40 clips → retarget → RL gym → 20 rollouts each → 800 trajectories · click a station · +/- speed |
+| 14 | **Kine2Go IK playground** | **Drag the foot**; the workspace ring and the law-of-cosines solution update · S: source · G: gait · N: naive copy |
+| 15 | **Kine2Go reward kernels** | **Six sliders**, six exp(−k·e²) curves, stacked total reward, robot that ends the episode past 1 m / 90° |
+| 16 | Kine2Go dataset | Rollout field + **heading rose** + logged-frame inspector · click to add a rollout · M: motion |
+| 17 | Connections | 5 questions × 4 papers board · click or hover a cell for the evidence |
+| 18 | Quiz | "Which bridge would you build?" · 1-4: answer · N: next |
+| 19 | Takeaway | |
 
 ![Gorilla demo](presentation/screenshots/gorilla_demo.png)
 ![VoxPoser demo](presentation/screenshots/voxposer_demo.png)
@@ -68,7 +70,7 @@ There is no LLM in this project: everything runs offline on a laptop CPU. Where 
 | Article | Module | What is implemented | What is simplified |
 |---|---|---|---|
 | Gorilla | `demos/gorilla_demo.py` | APIBench-style API database · **BM25 retriever** · the paper's **AST sub-tree matching** (correct / error / hallucination) · test-time documentation change | 15 hand-picked APIs instead of 1,645; stand-ins for the fine-tuned model |
-| VoxPoser | `demos/voxposer_demo.py` | affordance maps (distance transform), avoidance maps (Gaussian), the paper's cost weights (2 and 1), **greedy planner**, **closed-loop MPC replanning** | 2-D 100 × 100 slice instead of 100³; a perception stub instead of OWL-ViT / SAM / XMem |
+| VoxPoser | `demos/voxposer_demo.py` | affordance maps (distance transform), avoidance maps (Gaussian), the paper's cost weights (2 and 1), **greedy planner**, **closed-loop MPC replanning**, plus an A\* planner and a local-minimum "trap" scene for comparison | 2-D 100 × 100 slice instead of 100³; a perception stub instead of OWL-ViT / SAM / XMem |
 | Language to Rewards | `demos/l2r_demo.py` | reward API with terms R = −Σ w·r² (paper Eq. 1), executing "Reward Coder" code, **Predictive Sampling MPC** (MJPC's planner), a Code-as-Policies primitives baseline | the Pendulum-v1 robot instead of a quadruped or a dexterous hand |
 | Kine2Go | `demos/kine2go_demo.py` | gait references, **retargeting with inverse kinematics**, the paper's **imitation reward (Eqs. 1-8)** with its weights and scales, termination rule, random-heading rollouts | 2-D side view (8 joints instead of 12); a noisy tracker instead of a PPO policy |
 
@@ -101,9 +103,10 @@ Reading_7/
 │   ├── l2r_demo.py            Article 3
 │   └── kine2go_demo.py        Article 4
 ├── presentation/
-│   ├── interactive_presentation.py   entry point (17 slides)
+│   ├── interactive_presentation.py   entry point (19 slides)
 │   ├── engine.py              native-resolution rendering engine (from Readings 6)
-│   ├── slides_intro_gorilla.py · slides_voxposer.py · slides_l2r.py · slides_kine2go_end.py
+│   ├── slides_overview.py · slides_gorilla.py · slides_voxposer.py
+│   ├── slides_l2r.py · slides_kine2go.py · slides_closing.py
 │   ├── screenshots/           preview images
 │   └── icons/
 └── results/summary.json       numbers shown on the slides

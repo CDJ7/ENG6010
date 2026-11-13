@@ -150,6 +150,20 @@ class BM25:
             out.append(s)
         return out
 
+    def contributions(self, query):
+        """Per query word, per document: how much that word adds to the BM25
+        score (the sum over words is scores()). Used for the word heatmap."""
+        q = list(dict.fromkeys(tokenize(query)))
+        out = {}
+        for w in q:
+            row = []
+            for toks in self.toks:
+                f = toks.count(w)
+                row.append(self.idf.get(w, 0.0) * f * (self.k1 + 1) /
+                           (f + self.k1 * (1 - self.b + self.b * len(toks) / self.avgdl)) if f else 0.0)
+            out[w] = row
+        return out
+
     def top(self, query, k=1):
         s = self.scores(query)
         order = sorted(range(len(s)), key=lambda i: -s[i])
@@ -298,6 +312,34 @@ QUERIES = [
            ("Answer B (real API, wrong task)", "torch.hub.load('snakers4/silero-models', 'silero_stt', language='en')"),
            ("Answer C (made-up repo)", "torch.hub.load('openai/voices', 'tts_natural')")]),
 ]
+
+
+# Parts for the interactive "API builder": combine a function, a repository
+# and a model name, then let the AST matcher judge the result.
+BUILDER = {
+    "function": ["torch.hub.load", "hub.load", "pipeline"],
+    "repo": ["pytorch/vision", "snakers4/silero-models", "ultralytics/yolov5", "NVIDIA/DeepLearningExamples:torchhub",
+             "facebook/models", "automatic-speech-recognition", "summarization", "https://tfhub.dev/google/universal-sentence-encoder/4"],
+    "model": ["mobilenet_v2", "resnet50", "fcn_resnet50", "silero_stt", "yolov5s", "nvidia_tacotron2",
+              "asr", "openai/whisper-base", "facebook/bart-large-cnn", "(none)"],
+}
+
+
+def build_call(function, repo, model):
+    """Assemble the code string for the builder's current choice."""
+    if function == "hub.load":
+        return f"hub.load('{repo}')"
+    if function == "pipeline":
+        return f"pipeline('{repo}')" if model == "(none)" else f"pipeline('{repo}', model='{model}')"
+    return f"torch.hub.load('{repo}')" if model == "(none)" else f"torch.hub.load('{repo}', '{model}')"
+
+
+def which_api(code, db):
+    """Return the database entry the call matches, or None (a hallucination)."""
+    for d in db:
+        if matches(code, d["api_call"])[0]:
+            return d
+    return None
 
 
 def retriever_aware_model(user_prompt, db):

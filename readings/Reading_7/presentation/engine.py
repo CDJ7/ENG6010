@@ -545,3 +545,115 @@ def run_cli(slide_classes, caption, doc, context=None):
     else:
         app.run()
     pygame.quit()
+
+
+# ============================================================ widgets (Reading 7 v2)
+def mouse():
+    """Mouse position in design units."""
+    return to_design(pygame.mouse.get_pos())
+
+
+def inside(pos, rect):
+    x, y, w, h = rect
+    return x <= pos[0] <= x + w and y <= pos[1] <= y + h
+
+
+def poly(surf, color, pts):
+    """Anti-aliased filled polygon in design units."""
+    q = [P(p) for p in pts]
+    pygame.gfxdraw.aapolygon(surf, q, color)
+    pygame.gfxdraw.filled_polygon(surf, q, color)
+
+
+def slider(surf, x, y, w, value, vmin, vmax, label, color, active=False, fmt="{:.2f}"):
+    """A horizontal slider: label above, track, knob, value on the right."""
+    f = 0.0 if vmax == vmin else (value - vmin) / (vmax - vmin)
+    f = max(0.0, min(1.0, f))
+    text(surf, label, (x, y), 14, TEXT if active else MUTED, active)
+    text(surf, fmt.format(value), (x + w, y), 14, color if active else MUTED, True, anchor="topright")
+    draw.rect(surf, GRID, (x, y + 24, w, 6), border_radius=3)
+    draw.rect(surf, color, (x, y + 24, w * f, 6), border_radius=3)
+    circle(surf, color, (x + w * f, y + 27), 9 if active else 7)
+    if active:
+        circle(surf, BG, (x + w * f, y + 27), 3)
+
+
+def toggle(surf, x, y, on, label, color):
+    """An on/off switch with a label to its right."""
+    rrect(surf, color if on else GRID, (x, y, 44, 24), 12)
+    circle(surf, TEXT, (x + (32 if on else 12), y + 12), 9)
+    text(surf, label, (x + 54, y + 3), 15, TEXT if on else MUTED, on)
+
+
+def ring(surf, center, r, frac, color, width=16, track=GRID):
+    """Donut / progress ring, drawn as polygons so it is smooth at any size."""
+    cx, cy = center
+    def band(a0, a1, col):
+        n = max(2, int(abs(a1 - a0) / 0.05))
+        outer = [(cx + r * math.cos(a0 + (a1 - a0) * i / n), cy + r * math.sin(a0 + (a1 - a0) * i / n)) for i in range(n + 1)]
+        ri = r - width
+        inner = [(cx + ri * math.cos(a0 + (a1 - a0) * i / n), cy + ri * math.sin(a0 + (a1 - a0) * i / n)) for i in range(n + 1)]
+        poly(surf, col, outer + inner[::-1])
+    start = -math.pi / 2
+    band(start, start + 2 * math.pi * 0.9999, track)
+    if frac > 0.002:
+        band(start, start + 2 * math.pi * min(frac, 0.9999), color)
+
+
+def bubble(surf, x, y, w, lines, color, size=14, tail=None):
+    """Speech bubble with wrapped text; tail = (x, y) point it points at."""
+    h = 16
+    rows = []
+    for ln in lines:
+        rows += wrap(ln, size, w - 28) or [""]
+    h += len(rows) * (size + 6) + 4
+    if tail:
+        tx, ty = tail
+        bx = min(max(tx, x + 20), x + w - 20)
+        poly(surf, CARD2, [(bx - 10, y + (h if ty > y + h else 0)), (bx + 10, y + (h if ty > y + h else 0)), (tx, ty)])
+    rrect(surf, CARD2, (x, y, w, h), 12)
+    draw.rect(surf, color, (x, y, w, h), 2, border_radius=12)
+    yy = y + 10
+    for ln in rows:
+        text(surf, ln, (x + 14, yy), size, TEXT)
+        yy += size + 6
+    return h
+
+
+def chip(surf, x, y, label, color, on=False, size=14):
+    """Pill-shaped button; returns its rect (design units) for click tests."""
+    w = text_width(label, size, True) + 26
+    h = size + 14
+    rrect(surf, color if on else CARD2, (x, y, w, h), h // 2)
+    if not on:
+        draw.rect(surf, color, (x, y, w, h), 1, border_radius=h // 2)
+    text(surf, label, (x + w / 2, y + h / 2), size, BG if on else TEXT, True, anchor="center")
+    return (x, y, w, h)
+
+
+def colormap(a, stops):
+    """Map an array in [0, 1] to RGB by interpolating between colour stops."""
+    a = np.clip(a, 0, 1)
+    xs = np.linspace(0, 1, len(stops))
+    st = np.array(stops, float)
+    return np.stack([np.interp(a, xs, st[:, c]) for c in range(3)], -1).astype(np.uint8)
+
+
+def blit_array(surf, rgb, rect):
+    """Draw an (h, w, 3) uint8 image into a design-space rectangle."""
+    img = pygame.surfarray.make_surface(np.ascontiguousarray(rgb.transpose(1, 0, 2)))
+    r = RECT(rect)
+    surf.blit(pygame.transform.smoothscale(img, (max(1, r.w), max(1, r.h))), r.topleft)
+
+
+def mark(surf, ok, center, size, color):
+    """A drawn tick (ok=True) or cross: the UI fonts have no check-mark glyph."""
+    x, y = center
+    h = size / 2
+    if ok:
+        pts = [(x - h, y), (x - h * 0.25, y + h * 0.7), (x + h, y - h * 0.7)]
+        thick_line(surf, color, pts[0], pts[1], max(2, size / 6))
+        thick_line(surf, color, pts[1], pts[2], max(2, size / 6))
+    else:
+        thick_line(surf, color, (x - h * 0.7, y - h * 0.7), (x + h * 0.7, y + h * 0.7), max(2, size / 6))
+        thick_line(surf, color, (x - h * 0.7, y + h * 0.7), (x + h * 0.7, y - h * 0.7), max(2, size / 6))

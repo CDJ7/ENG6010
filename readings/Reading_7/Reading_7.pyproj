@@ -34,10 +34,12 @@
   <ItemGroup>
     <Compile Include="presentation\interactive_presentation.py" />
     <Compile Include="presentation\engine.py" />
-    <Compile Include="presentation\slides_intro_gorilla.py" />
+    <Compile Include="presentation\slides_overview.py" />
+    <Compile Include="presentation\slides_gorilla.py" />
     <Compile Include="presentation\slides_voxposer.py" />
     <Compile Include="presentation\slides_l2r.py" />
-    <Compile Include="presentation\slides_kine2go_end.py" />
+    <Compile Include="presentation\slides_kine2go.py" />
+    <Compile Include="presentation\slides_closing.py" />
     <Compile Include="evaluate.py" />
     <Compile Include="demos\__init__.py" />
     <Compile Include="demos\gorilla_demo.py" />

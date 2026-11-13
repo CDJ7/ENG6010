@@ -116,8 +116,12 @@ def compose(scene, instr):
     tgt = detect(scene, instr["target"])
     affs = [affordance_map(tgt)]
     avos = [avoidance_map(detect(scene, n), margin) for n, margin in instr["avoid"]]
+    occ = np.zeros((N, N), bool)                 # cells inside avoided objects (+2 cm)
+    for n, _ in instr["avoid"]:
+        o = scene["objects"][n]
+        occ |= (XX - o["pos"][0]) ** 2 + (YY - o["pos"][1]) ** 2 <= (o["radius"] + 2) ** 2
     return dict(affordance=affs[0], avoidance=sum(avos) if avos else np.zeros((N, N)),
-                cost=cost_map(affs, avos), target=tgt)
+                cost=cost_map(affs, avos), target=tgt, occupied=occ)
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +151,58 @@ def greedy_plan(cost, start, goal, max_len=250, goal_tol=2.5):
         path.append((x, y))
         seen.add((x, y))
     return path, False
+
+
+def astar_plan(cost, start, goal, goal_tol=2.5, blocked=None):
+    """A* / Dijkstra over the same cost map, for comparison with greedy search.
+    Step cost = distance x (1 + 6 * normalised map cost), so it trades path
+    length against staying in low-cost voxels. Unlike greedy search it cannot
+    get stuck in a local minimum (the classic potential-field trap)."""
+    import heapq
+    c = (cost - cost.min()) / (cost.max() - cost.min() + 1e-9)
+    sx, sy = int(round(start[0])), int(round(start[1]))
+    gx, gy = goal
+    best = {(sx, sy): 0.0}
+    prev = {}
+    pq = [(0.0, 0.0, sx, sy)]
+    while pq:
+        f, g, x, y = heapq.heappop(pq)
+        if np.hypot(x - gx, y - gy) <= goal_tol:
+            path = [(x, y)]
+            while (x, y) in prev:
+                x, y = prev[(x, y)]
+                path.append((x, y))
+            return path[::-1], True
+        if g > best.get((x, y), 1e18):
+            continue
+        for dx, dy in STEPS:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < N and 0 <= ny < N and not (blocked is not None and blocked[ny, nx]):
+                ng = g + np.hypot(dx, dy) * (1 + 6 * c[ny, nx])
+                if ng < best.get((nx, ny), 1e18):
+                    best[(nx, ny)] = ng
+                    prev[(nx, ny)] = (x, y)
+                    heapq.heappush(pq, (ng + np.hypot(nx - gx, ny - gy), ng, nx, ny))
+    return [(sx, sy)], False
+
+
+TRAP_INSTRUCTION = dict(
+    text="Reach the handle, avoiding the mug, the vase and the bowl.",
+    code=["def avoidance_map():",
+          "    for name in ['mug', 'vase', 'bowl']:",
+          "        map[detect(name).occupancy] = 1",
+          "    return gaussian_smooth(map)"],
+    target="top drawer handle", avoid=[("vase", 0.0), ("mug", 0.0), ("bowl", 0.0)])
+
+
+def trap_scene():
+    """Three objects form a cup that opens towards the gripper, right on the
+    straight line to the handle: a textbook local minimum ("potential-field
+    trap") for greedy descent. Greedy search walks into the cup first."""
+    s = make_scene(handle=(88, 50), mug=(55, 38), vase=(62, 50), bowl=(55, 62), start=(12, 50))
+    for n in ("mug", "vase", "bowl"):
+        s["objects"][n]["radius"] = 8
+    return s
 
 
 def collides(scene, p, names):
@@ -199,6 +255,7 @@ def evaluate(n=300, seed=0):
        (the handle moved half-way through), compared with open-loop?"""
     rng = np.random.default_rng(seed)
     res = {k: {"reached": 0, "collided": 0} for k in ("aff_only", "aff_avoid", "open_loop_dist", "mpc_dist")}
+    outcomes = {k: [] for k in res}      # per scene: 0 clean arrival, 1 hit an obstacle, 2 did not arrive
     for _ in range(n):
         s = random_scene(rng)
         shift = rng.uniform(-25, 25)
@@ -215,7 +272,11 @@ def evaluate(n=300, seed=0):
             out = run_episode(sc, instr, **kw)
             res[key]["reached"] += out["reached"] and not out["collided"]
             res[key]["collided"] += out["collided"]
-    return {k: {m: v / n for m, v in d.items()} for k, d in res.items()} | {"n_scenes": n}
+            outcomes[key].append(1 if out["collided"] else (0 if out["reached"] else 2))
+    summary = {k: {m: v / n for m, v in d.items()} for k, d in res.items()}
+    for k in summary:
+        summary[k]["outcomes"] = outcomes[k]
+    return summary | {"n_scenes": n}
 
 
 if __name__ == "__main__":
